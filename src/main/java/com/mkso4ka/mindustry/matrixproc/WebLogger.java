@@ -1,7 +1,15 @@
 package com.mkso4ka.mindustry.matrixproc;
 
+import arc.files.Fi;
+import arc.func.Cons;
+import arc.scene.ui.Button;
+import arc.scene.ui.CheckBox;
+import arc.scene.ui.Slider;
 import arc.util.Log;
-import fi.iki.elonen.NanoHTTPD; // Импортируем NanoHTTPD
+import fi.iki.elonen.NanoHTTPD;
+import mindustry.Vars;
+import mindustry.ui.dialogs.BaseDialog;
+
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -10,12 +18,13 @@ import java.util.List;
 
 /**
  * Кастомный логгер, который запускает локальный веб-сервер для отображения логов в реальном времени.
- * ИСПОЛЬЗУЕТ NanoHTTPD для совместимости с Android.
+ * Также предоставляет обертки для UI-элементов для автоматического логирования действий.
  */
-public class WebLogger extends NanoHTTPD { // Наследуемся от NanoHTTPD
+public class WebLogger extends NanoHTTPD {
 
     /**
      * ГЛАВНАЯ КОНСТАНТА: Установите false, чтобы полностью отключить веб-сервер и логгирование через него.
+     * При значении false компилятор вырежет весь связанный код.
      */
     public static final boolean ENABLE_WEB_LOGGER = true;
 
@@ -24,18 +33,15 @@ public class WebLogger extends NanoHTTPD { // Наследуемся от NanoHT
     private static WebLogger serverInstance;
     private static final SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm:ss");
 
-    // Приватный конструктор, чтобы управлять созданием сервера
     private WebLogger() throws IOException {
         super(PORT);
     }
 
-    // Основной метод обработки запросов
     @Override
     public Response serve(IHTTPSession session) {
         String uri = session.getUri();
         Method method = session.getMethod();
 
-        // Запрос на Web UI
         if ("/".equals(uri)) {
             String html = "<html><head><title>PictureToLogic Logs</title>" +
                 "<style>body{font-family:monospace;background-color:#2c2c2c;color:#e0e0e0;} pre{white-space:pre-wrap;word-break:break-all;} button{padding:10px;}</style></head>" +
@@ -50,7 +56,6 @@ public class WebLogger extends NanoHTTPD { // Наследуемся от NanoHT
             return newFixedLengthResponse(Response.Status.OK, "text/html", html);
         }
 
-        // Запрос на API (для Termux)
         if ("/logs".equals(uri)) {
             if (Method.GET.equals(method)) {
                 String response;
@@ -69,8 +74,6 @@ public class WebLogger extends NanoHTTPD { // Наследуемся от NanoHT
         return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not Found");
     }
 
-    // --- Публичные методы для логгирования ---
-
     private static void log(String level, String text, Object... args) {
         String formattedText = args.length == 0 ? text : String.format(text, args);
         String timestamp = dateFormat.format(new Date());
@@ -87,24 +90,65 @@ public class WebLogger extends NanoHTTPD { // Наследуемся от NanoHT
         }
     }
 
-    public static void info(String text, Object... args) {
-        log("I", text, args);
+    public static void info(String text, Object... args) { log("I", text, args); }
+    public static void warn(String text, Object... args) { log("W", text, args); }
+    public static void err(String text, Object... args) { log("E", text, args); }
+
+    // --- МЕТОДЫ-ОБЕРТКИ ДЛЯ UI ---
+
+    /** Обертка для кнопок. Логирует нажатие. */
+    public static <T extends Button> T logClick(T button, String name) {
+        if (ENABLE_WEB_LOGGER) {
+            button.clicked(() -> info("UI Event: Clicked '%s'", name));
+        }
+        return button;
     }
 
-    public static void warn(String text, Object... args) {
-        log("W", text, args);
+    /** Обертка для слайдеров. Логирует изменение значения. */
+    public static Slider logChange(Slider slider, String name) {
+        if (ENABLE_WEB_LOGGER) {
+            slider.changed(() -> info("UI Event: Slider '%s' set to %d", name, (int)slider.getValue()));
+        }
+        return slider;
     }
 
-    public static void err(String text, Object... args) {
-        log("E", text, args);
+    /** Обертка для галочек (CheckBox). Логирует изменение состояния. */
+    public static CheckBox logToggle(CheckBox checkBox, String name) {
+        if (ENABLE_WEB_LOGGER) {
+            checkBox.changed(() -> info("UI Event: CheckBox '%s' is now %s", name, checkBox.isChecked() ? "checked" : "unchecked"));
+        }
+        return checkBox;
+    }
+
+    /** Обертка для показа диалога. */
+    public static void logShow(BaseDialog dialog, String name) {
+        if (ENABLE_WEB_LOGGER) {
+            info("UI Event: Dialog '%s' shown", name);
+        }
+        dialog.show();
+    }
+
+    /** Обертка для выбора файла. */
+    public static void logFileChooser(Cons<Fi> callback) {
+        if (ENABLE_WEB_LOGGER) {
+            info("UI Event: File chooser opened");
+        }
+        Vars.platform.showFileChooser(true, "Выбор изображения", "png", file -> {
+            if (ENABLE_WEB_LOGGER) {
+                if (file != null) {
+                    info("UI Event: File selected: %s", file.name());
+                } else {
+                    info("UI Event: File selection cancelled");
+                }
+            }
+            callback.get(file);
+        });
     }
 
     // --- Управление сервером ---
 
     public static void startServer() {
-        if (!ENABLE_WEB_LOGGER || serverInstance != null) {
-            return;
-        }
+        if (!ENABLE_WEB_LOGGER || serverInstance != null) return;
         try {
             serverInstance = new WebLogger();
             serverInstance.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);

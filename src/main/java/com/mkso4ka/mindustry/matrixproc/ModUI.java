@@ -2,12 +2,7 @@ package com.mkso4ka.mindustry.matrixproc;
 
 import arc.Core;
 import arc.files.Fi;
-import arc.scene.ui.ButtonGroup;
-import arc.scene.ui.Image;
-import arc.scene.ui.Label;
-import arc.scene.ui.ScrollPane;
-import arc.scene.ui.Slider;
-import arc.scene.ui.TextButton;
+import arc.scene.ui.*;
 import arc.scene.ui.layout.Table;
 import arc.util.Log;
 import mindustry.Vars;
@@ -20,8 +15,7 @@ import mindustry.world.blocks.logic.LogicDisplay;
 
 public class ModUI {
 
-    // ИСПОЛЬЗУЕМ largeLogicDisplay ПО УМОЛЧАНИЮ
-    private static LogicDisplay selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay; 
+    private static LogicDisplay selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay;
     private static boolean showDebug = true;
 
     private static Slider xSlider, ySlider;
@@ -31,7 +25,11 @@ public class ModUI {
     public static void build() {
         try {
             Table schematicsButtons = Vars.ui.schematics.buttons;
-            schematicsButtons.button("PictureToLogic", Icon.image, ModUI::showSettingsDialog).size(180, 64).padLeft(6);
+            // Оборачиваем главную кнопку
+            WebLogger.logClick(
+                schematicsButtons.button("PictureToLogic", Icon.image, ModUI::showSettingsDialog),
+                "Open Settings"
+            ).size(180, 64).padLeft(6);
         } catch (Exception e) {
             WebLogger.err("Failed to build PictureToLogic UI!", e);
         }
@@ -48,15 +46,17 @@ public class ModUI {
         Table sliders = new Table();
         sliders.defaults().pad(2);
 
-        xSlider = new Slider(1, 10, 1, false);
+        // Оборачиваем слайдеры
+        xSlider = WebLogger.logChange(new Slider(1, 10, 1, false), "Displays X");
+        ySlider = WebLogger.logChange(new Slider(1, 10, 1, false), "Displays Y");
         xLabel = new Label("1");
+        yLabel = new Label("1");
+
         sliders.add("Дисплеев по X:").left();
         sliders.add(xSlider).width(200f).padLeft(10).padRight(10);
         sliders.add(xLabel).left();
         sliders.row();
 
-        ySlider = new Slider(1, 10, 1, false);
-        yLabel = new Label("1");
         sliders.add("Дисплеев по Y:").left();
         sliders.add(ySlider).width(200f).padLeft(10).padRight(10);
         sliders.add(yLabel).left();
@@ -73,17 +73,21 @@ public class ModUI {
         ButtonGroup<TextButton> group = new ButtonGroup<>();
         group.setMinCheckCount(1);
 
-        // Кнопка для 3x3 дисплея (logicDisplay)
-        TextButton logicDisplayButton = new TextButton("Логический дисплей (3x3)", Styles.togglet);
+        // Оборачиваем кнопки выбора дисплея
+        TextButton logicDisplayButton = WebLogger.logClick(
+            new TextButton("Логический дисплей (3x3)", Styles.togglet),
+            "Select Logic Display (3x3)"
+        );
         logicDisplayButton.clicked(() -> selectedDisplay = (LogicDisplay) Blocks.logicDisplay);
         
-        // Кнопка для 6x6 дисплея (largeLogicDisplay)
-        TextButton largeLogicDisplayButton = new TextButton("Большой дисплей (6x6)", Styles.togglet);
+        TextButton largeLogicDisplayButton = WebLogger.logClick(
+            new TextButton("Большой дисплей (6x6)", Styles.togglet),
+            "Select Large Logic Display (6x6)"
+        );
         largeLogicDisplayButton.clicked(() -> selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay);
         
         group.add(logicDisplayButton, largeLogicDisplayButton);
         
-        // Устанавливаем, какая кнопка будет выбрана по умолчанию
         if (selectedDisplay == Blocks.largeLogicDisplay) {
             largeLogicDisplayButton.setChecked(true);
         } else {
@@ -94,18 +98,23 @@ public class ModUI {
         displaySelector.add(largeLogicDisplayButton).size(240, 60).padLeft(10);
         content.add(displaySelector).row();
 
-        content.check("Показывать отладочное окно", showDebug, b -> showDebug = b).left().padTop(20).row();
+        // Оборачиваем галочку
+        CheckBox debugCheckBox = new CheckBox("Показывать отладочное окно");
+        debugCheckBox.setChecked(showDebug);
+        debugCheckBox.changed(() -> showDebug = debugCheckBox.isChecked());
+        content.add(WebLogger.logToggle(debugCheckBox, "Show Debug Window")).left().padTop(20).row();
 
-        content.button("Выбрать и создать чертеж", Icon.file, () -> {
-            Vars.platform.showFileChooser(true, "Выбор изображения", "png", file -> {
+        // Оборачиваем кнопку выбора файла
+        TextButton selectFileButton = new TextButton("Выбрать и создать чертеж", Icon.file);
+        selectFileButton.clicked(() -> {
+            WebLogger.logFileChooser(file -> {
                 if (file != null) {
                     dialog.hide();
                     generateAndShowSchematic(file);
-                } else {
-                    Vars.ui.showInfo("Файл не выбран.");
                 }
             });
-        }).padTop(20).growX().height(60);
+        });
+        content.add(WebLogger.logClick(selectFileButton, "Select Image and Create")).padTop(20).growX().height(60);
 
         xSlider.changed(() -> {
             xLabel.setText(String.valueOf((int)xSlider.getValue()));
@@ -117,7 +126,8 @@ public class ModUI {
         });
         updatePreview();
 
-        dialog.show();
+        // Логируем показ самого диалога
+        WebLogger.logShow(dialog, "Settings Dialog");
     }
 
     private static void updatePreview() {
@@ -135,6 +145,10 @@ public class ModUI {
 
     private static void generateAndShowSchematic(Fi imageFile) {
         Vars.ui.loadfrag.show("Обработка изображения...");
+        WebLogger.info("--- Starting Image Processing ---");
+        WebLogger.info("File: %s", imageFile.name());
+        WebLogger.info("Grid: %dx%d", (int)xSlider.getValue(), (int)ySlider.getValue());
+        WebLogger.info("Display Type: %s", selectedDisplay.name);
 
         new Thread(() -> {
             ProcessingResult result = null;
@@ -148,6 +162,7 @@ public class ModUI {
                 WebLogger.err("Критическая ошибка при создании чертежа!", e);
             } finally {
                 Vars.ui.loadfrag.hide();
+                WebLogger.info("--- Image Processing Finished ---");
                 
                 ProcessingResult finalResult = result;
                 Core.app.post(() -> {
@@ -157,9 +172,10 @@ public class ModUI {
                         } else {
                             Vars.ui.schematics.hide();
                             Vars.control.input.useSchematic(finalResult.schematic);
+                            WebLogger.info("Schematic built successfully.");
                         }
                     } else {
-                        Vars.ui.showInfo("[scarlet]Не удалось создать чертеж. Проверьте логи.[]");
+                        WebLogger.err("Failed to create schematic. Check logs for details.");
                     }
                 });
             }
@@ -224,6 +240,6 @@ public class ModUI {
         
         dialog.buttons.button("Отмена", Icon.cancel, dialog::hide).size(150, 54);
 
-        dialog.show();
+        WebLogger.logShow(dialog, "Debug Dialog");
     }
 }
