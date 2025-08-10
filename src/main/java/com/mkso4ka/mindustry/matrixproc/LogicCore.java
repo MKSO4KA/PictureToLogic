@@ -12,7 +12,7 @@ import mindustry.world.Block;
 import mindustry.world.Tile;
 import mindustry.world.blocks.logic.LogicBlock;
 import mindustry.world.blocks.logic.LogicBlock.LogicLink;
-import mindustry.world.blocks.logic.LogicDisplay; // Импортируем
+import mindustry.world.blocks.logic.LogicDisplay;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -23,11 +23,10 @@ public class LogicCore {
     private static final int COMMANDS_PER_PROCESSOR = 989;
     private static final int BORDER_SIZE = 8;
 
-    // ОБНОВЛЕНО: Метод теперь принимает тип дисплея
     public Schematic processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock) {
         try {
             Log.info("--- НАЧАЛО ОБРАБОТКИ ---");
-            int displaySize = displayBlock.size; // Берем размер из выбранного блока
+            int displaySize = displayBlock.size;
 
             int displayPixelSize = getDisplayPixelSize(displaySize);
             int totalWidth = (displaysX * displayPixelSize) + (Math.max(0, displaysX - 1) * BORDER_SIZE * 2);
@@ -99,58 +98,52 @@ public class LogicCore {
     private Schematic buildSchematic(DisplayProcessorMatrixFinal.Cell[][] matrix, DisplayInfo[] displays, Map<Integer, List<String>> codeMap, Block displayBlock) {
         Seq<Stile> tiles = new Seq<>();
         
-        int rows = matrix.length;
-        int cols = matrix[0].length;
+        // --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Гарантированное размещение ---
 
-        for (int row = 0; row < rows; row++) {
-            for (int col = 0; col < cols; col++) {
-                DisplayProcessorMatrixFinal.Cell cell = matrix[row][col];
-                if (cell.type == 0) continue;
+        // ЭТАП 1: Размещаем все дисплеи. Ни больше, ни меньше.
+        for (DisplayInfo display : displays) {
+            short schemX = (short)display.center.x;
+            short schemY = (short)display.center.y;
+            tiles.add(new Stile(displayBlock, schemX, schemY, null, (byte) 0));
+        }
 
-                // --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Меняем местами row и col ---
-                // Координата X в схематике - это столбец (col).
-                // Координата Y в схематике - это строка (row).
-                short schemX = (short)col;
-                short schemY = (short)row;
+        // ЭТАП 2: Размещаем все процессоры.
+        int width = matrix.length;
+        int height = matrix[0].length;
 
-                if (cell.type == 2) {
-                    if (isCenterOfBlock(row, col, cell.ownerId, matrix, displayBlock.size)) {
-                        tiles.add(new Stile(displayBlock, schemX, schemY, null, (byte) 0));
+        for (int x = 0; x < width; x++) {
+            for (int y = 0; y < height; y++) {
+                DisplayProcessorMatrixFinal.Cell cell = matrix[x][y];
+                
+                // Нас интересуют только процессоры
+                if (cell.type == 1 && cell.ownerId >= 0) {
+                    short schemX = (short)x;
+                    short schemY = (short)y;
+                    DisplayInfo ownerDisplay = displays[cell.ownerId];
+                    
+                    String code = "";
+                    List<String> codesForDisplay = codeMap.get(cell.ownerId);
+                    if (codesForDisplay != null && !codesForDisplay.isEmpty()) {
+                        code = codesForDisplay.remove(0);
                     }
-                } else if (cell.type == 1) {
-                    if (cell.ownerId >= 0) {
-                        DisplayInfo ownerDisplay = displays[cell.ownerId];
-                        
-                        String code = "";
-                        List<String> codesForDisplay = codeMap.get(cell.ownerId);
-                        if (codesForDisplay != null && !codesForDisplay.isEmpty()) {
-                            code = codesForDisplay.remove(0);
-                        }
 
-                        LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
-                        build.tile = new Tile(schemX, schemY);
-                        
-                        // Координаты для линка тоже должны быть (col, row)
-                        build.links.add(new LogicLink(ownerDisplay.center.y, ownerDisplay.center.x, "display1", true));
-                        build.updateCode(code);
-                        
-                        tiles.add(new Stile(Blocks.microProcessor, schemX, schemY, build.config(), (byte) 0));
-                    }
+                    LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
+                    build.tile = new Tile(schemX, schemY);
+                    
+                    build.links.add(new LogicLink(ownerDisplay.center.x, ownerDisplay.center.y, "display1", true));
+                    build.updateCode(code);
+                    
+                    tiles.add(new Stile(Blocks.microProcessor, schemX, schemY, build.config(), (byte) 0));
                 }
             }
         }
         
         StringMap tags = new StringMap();
         tags.put("name", "PictureToLogic-Schematic");
-        return new Schematic(tiles, tags, cols, rows); // Ширина - это cols, высота - это rows
+        return new Schematic(tiles, tags, width, height);
     }
     
-    private boolean isCenterOfBlock(int row, int col, int ownerId, DisplayProcessorMatrixFinal.Cell[][] matrix, int size) {
-        int offset = size / 2;
-        if (row - offset < 0 || col - offset < 0 || row + offset >= matrix.length || col + offset >= matrix[0].length) return false;
-        // Проверяем углы блока, чтобы убедиться, что это центр
-        return matrix[row-offset][col-offset].ownerId == ownerId && matrix[row+offset][col+offset].ownerId == ownerId;
-    }
+    // Метод isCenterOfBlock больше не нужен, его можно удалить.
 
     // ... (остальные вспомогательные методы остаются без изменений) ...
     private List<String> generateCommandList(Map<Integer, List<Rect>> rects, int displayPixelSize, int offsetX, int offsetY) {
@@ -171,8 +164,8 @@ public class LogicCore {
     }
 
     private int getDisplayPixelSize(int displayBlockSize) {
-        if (displayBlockSize >= 6) return 176; // Большой дисплей
-        return 80; // Маленький дисплей
+        if (displayBlockSize >= 6) return 176;
+        return 80;
     }
 
     private String formatColorCommand(int rgba8888) {
