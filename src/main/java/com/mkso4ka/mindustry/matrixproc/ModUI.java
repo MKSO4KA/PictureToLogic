@@ -19,8 +19,8 @@ public class ModUI {
     private static LogicDisplay selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay;
     private static boolean showDebug = true;
 
-    private static Slider xSlider, ySlider, toleranceSlider;
-    private static Label xLabel, yLabel, toleranceLabel;
+    private static Slider xSlider, ySlider, toleranceSlider, instructionsSlider;
+    private static Label xLabel, yLabel, toleranceLabel, instructionsLabel;
     private static Table previewTable;
 
     public static void build() {
@@ -66,6 +66,16 @@ public class ModUI {
         sliders.add("Допуск цвета:").padTop(10);
         sliders.add(toleranceSlider).width(200f).padLeft(10).padRight(10).padTop(10);
         sliders.add(toleranceLabel).padTop(10);
+        sliders.row();
+
+        // --- НОВЫЙ СЛАЙДЕР ДЛЯ КОЛИЧЕСТВА ИНСТРУКЦИЙ ---
+        instructionsSlider = WebLogger.logChange(new Slider(100, 1000, 100, false), "Max Instructions");
+        instructionsSlider.setValue(1000); // По умолчанию максимум
+        instructionsLabel = new Label("1000");
+        sliders.add("Макс. инструкций:").padTop(10);
+        sliders.add(instructionsSlider).width(200f).padLeft(10).padRight(10).padTop(10);
+        sliders.add(instructionsLabel).padTop(10);
+        // ------------------------------------------------
 
         previewTable = new Table();
         previewTable.setBackground(Tex.buttonDown);
@@ -129,6 +139,9 @@ public class ModUI {
         toleranceSlider.changed(() -> {
             toleranceLabel.setText(String.format("%.1f", toleranceSlider.getValue()));
         });
+        instructionsSlider.changed(() -> {
+            instructionsLabel.setText(String.valueOf((int)instructionsSlider.getValue()));
+        });
         updatePreview();
 
         WebLogger.logShow(dialog, "Settings Dialog");
@@ -154,6 +167,7 @@ public class ModUI {
         WebLogger.info("Grid: %dx%d", (int)xSlider.getValue(), (int)ySlider.getValue());
         WebLogger.info("Display Type: %s", selectedDisplay.name);
         WebLogger.info("Color Tolerance (Delta E): %.1f", toleranceSlider.getValue());
+        WebLogger.info("Max Instructions (User): %d", (int)instructionsSlider.getValue());
 
         new Thread(() -> {
             ProcessingResult result = null;
@@ -161,9 +175,11 @@ public class ModUI {
                 int displaysX = (int) xSlider.getValue();
                 int displaysY = (int) ySlider.getValue();
                 double tolerance = toleranceSlider.getValue();
+                // Применяем твое правило: пользовательское значение минус 11
+                int maxInstructions = (int)instructionsSlider.getValue() - 11;
 
                 LogicCore logic = new LogicCore();
-                result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay, tolerance);
+                result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay, tolerance, maxInstructions);
             } catch (Exception e) {
                 WebLogger.err("Критическая ошибка при создании чертежа!", e);
             } finally {

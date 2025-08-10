@@ -20,10 +20,12 @@ import java.util.Map;
 
 public class LogicCore {
 
-    private static final int COMMANDS_PER_PROCESSOR = 989;
+    // УБРАНО: Константа больше не нужна, значение будет приходить из UI
+    // private static final int COMMANDS_PER_PROCESSOR = 989;
     private static final int BORDER_SIZE = 8;
 
-    public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, double tolerance) {
+    // ИЗМЕНЕНО: Добавлен параметр maxInstructions
+    public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, double tolerance, int maxInstructions) {
         try {
             int displaySize = displayBlock.size;
             int displayPixelSize = getDisplayPixelSize(displaySize);
@@ -59,10 +61,13 @@ public class LogicCore {
                     int offsetY = (i > 0) ? BORDER_SIZE : 0;
                     List<String> allCommands = generateCommandList(rects, displayPixelSize, offsetX, offsetY);
                     int commandCount = allCommands.size();
-                    processorsPerDisplay[displayIndex] = (int) Math.ceil((double) commandCount / COMMANDS_PER_PROCESSOR);
+
+                    // ИЗМЕНЕНО: Используем параметр maxInstructions вместо константы
+                    processorsPerDisplay[displayIndex] = (int) Math.ceil((double) commandCount / maxInstructions);
+                    
                     for (int p = 0; p < processorsPerDisplay[displayIndex]; p++) {
-                        int start = p * COMMANDS_PER_PROCESSOR;
-                        int end = Math.min(start + COMMANDS_PER_PROCESSOR, commandCount);
+                        int start = p * maxInstructions;
+                        int end = Math.min(start + maxInstructions, commandCount);
                         List<String> chunk = allCommands.subList(start, end);
                         StringBuilder codeBuilder = new StringBuilder();
                         chunk.forEach(command -> codeBuilder.append(command).append("\n"));

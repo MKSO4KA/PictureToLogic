@@ -14,7 +14,7 @@ ext {
 }
 
 group = 'com.mkso4ka.mindustry.matrixproc'
-version = '1.0-SNAPSHOT'
+version = '1.1'
 sourceCompatibility = 1.8
 
 repositories {
