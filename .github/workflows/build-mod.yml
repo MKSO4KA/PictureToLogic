@@ -22,6 +22,12 @@ jobs:
       - name: Grant execute permission to gradlew
         run: chmod +x gradlew
 
+      # --- НОВЫЙ ШАГ, КОТОРЫЙ НУЖНО ДОБАВИТЬ ---
+      # Он выполнит очистку перед сборкой
+      - name: Clean project
+        run: ./gradlew clean
+
+      # --- ЭТОТ ШАГ УЖЕ БЫЛ, ОСТАВЛЯЕМ ЕГО ---
       - name: Build with Gradle
         run: ./gradlew jar
 
