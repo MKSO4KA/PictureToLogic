@@ -9,6 +9,7 @@ import mindustry.content.Blocks;
 import mindustry.game.Schematic;
 import mindustry.game.Schematic.Stile;
 import mindustry.world.Block;
+import mindustry.world.Tile; // ИМПОРТИРУЕМ TILE
 import mindustry.world.blocks.logic.LogicBlock;
 import mindustry.world.blocks.logic.LogicBlock.LogicLink;
 import java.util.ArrayList;
@@ -40,7 +41,6 @@ public class LogicCore {
             MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, DisplayProcessorMatrixFinal.PROCESSOR_REACH);
 
             int[] processorsPerDisplay = new int[blueprint.displayCoordinates.length];
-            // ИЗМЕНЕНИЕ: Используем Map для хранения кода. Это решает проблему с вылетом.
             Map<Integer, List<String>> codeMap = new HashMap<>();
 
             for (int i = 0; i < displaysY; i++) {
@@ -111,14 +111,19 @@ public class LogicCore {
                     if (cell.ownerId >= 0) {
                         DisplayInfo ownerDisplay = displays[cell.ownerId];
                         
-                        // ИЗМЕНЕНИЕ: Безопасно берем код из Map
                         String code = "";
                         List<String> codesForDisplay = codeMap.get(cell.ownerId);
                         if (codesForDisplay != null && !codesForDisplay.isEmpty()) {
-                            code = codesForDisplay.remove(0); // Взять и удалить первый доступный код
+                            code = codesForDisplay.remove(0);
                         }
 
                         LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
+                        
+                        // --- ВОТ ОНО, КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ---
+                        // Мы должны "привязать" нашу виртуальную постройку к фиктивному тайлу.
+                        build.tile = new Tile(x, y);
+                        // -----------------------------------------
+
                         build.links.add(new LogicLink(ownerDisplay.center.x, ownerDisplay.center.y, "display1", true));
                         build.updateCode(code);
                         
