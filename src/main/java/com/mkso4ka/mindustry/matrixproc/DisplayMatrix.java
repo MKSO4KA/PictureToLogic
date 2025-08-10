@@ -3,7 +3,7 @@ package com.mkso4ka.mindustry.matrixproc;
 import static java.lang.Math.ceil;
 import static java.lang.Math.max;
 
-// Этот класс полностью основан на вашей логике
+// ВАША оригинальная логика расчета сетки. Она работает правильно.
 class DisplayMatrix {
     public DisplayMatrix() {}
 
@@ -19,7 +19,7 @@ class DisplayMatrix {
         int startOffset = border;
         int count = 0;
 
-        // ВАША логика итерации и инверсии оси Y, которая работает правильно
+        // Ваша правильная итерация и инверсия оси Y
         for (int j = 0; j < x; j++) { // Внешний цикл по X (колонки)
             for (int i = 0; i < y; i++) { // Внутренний цикл по Y (ряды)
                 
@@ -27,7 +27,7 @@ class DisplayMatrix {
                 int topLeftX = startOffset + j * (displaySize + spacing);
                 centers[count][0] = topLeftX + displaySize / 2;
 
-                // Расчет Y-координаты центра с инверсией
+                // Расчет Y-координаты центра с инверсией для Mindustry
                 int topLeftY_java = startOffset + i * (displaySize + spacing);
                 int centerY_java = topLeftY_java + displaySize / 2;
                 centers[count][1] = (n - 1) - centerY_java;
@@ -35,7 +35,6 @@ class DisplayMatrix {
                 count++;
             }
         }
-        // Возвращаем blueprint с правильными размерами и координатами
         return new MatrixBlueprint(n, m, centers);
     }
 }

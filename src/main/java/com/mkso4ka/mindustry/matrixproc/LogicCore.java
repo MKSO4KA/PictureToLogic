@@ -25,9 +25,7 @@ public class LogicCore {
 
     public Schematic processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock) {
         try {
-            Log.info("--- НАЧАЛО ОБРАБОТКИ ---");
             int displaySize = displayBlock.size;
-
             int displayPixelSize = getDisplayPixelSize(displaySize);
             int totalWidth = (displaysX * displayPixelSize) + (Math.max(0, displaysX - 1) * BORDER_SIZE * 2);
             int totalHeight = (displaysY * displayPixelSize) + (Math.max(0, displaysY - 1) * BORDER_SIZE * 2);
@@ -37,7 +35,7 @@ public class LogicCore {
             scaledMasterPixmap.draw(masterPixmap, 0, 0, masterPixmap.width, masterPixmap.height, 0, 0, totalWidth, totalHeight);
             masterPixmap.dispose();
 
-            // ВЫЗЫВАЕМ ВАШУ ЛОГИКУ СОЗДАНИЯ СЕТКИ
+            // 1. Используем ВАШУ логику для создания blueprint
             DisplayMatrix displayMatrix = new DisplayMatrix();
             MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, DisplayProcessorMatrixFinal.PROCESSOR_REACH);
 
@@ -48,25 +46,20 @@ public class LogicCore {
                 for (int j = 0; j < displaysX; j++) {
                     int displayIndex = j * displaysY + i;
                     codeMap.put(displayIndex, new ArrayList<>());
-
+                    // ... (код анализа изображения остается без изменений)
                     int sliceWidth = displayPixelSize + (j > 0 ? BORDER_SIZE : 0) + (j < displaysX - 1 ? BORDER_SIZE : 0);
                     int sliceHeight = displayPixelSize + (i > 0 ? BORDER_SIZE : 0) + (i < displaysY - 1 ? BORDER_SIZE : 0);
                     int subX = j * (displayPixelSize + BORDER_SIZE * 2) - (j > 0 ? BORDER_SIZE : 0);
                     int subY = i * (displayPixelSize + BORDER_SIZE * 2) - (i > 0 ? BORDER_SIZE : 0);
-
                     Pixmap finalSlice = new Pixmap(sliceWidth, sliceHeight);
                     finalSlice.draw(scaledMasterPixmap, 0, 0, subX, subY, sliceWidth, sliceHeight);
-
                     ImageProcessor processor = new ImageProcessor(finalSlice);
                     Map<Integer, List<Rect>> rects = processor.groupOptimal();
-
                     int offsetX = (j > 0) ? BORDER_SIZE : 0;
                     int offsetY = (i > 0) ? BORDER_SIZE : 0;
-
                     List<String> allCommands = generateCommandList(rects, displayPixelSize, offsetX, offsetY);
                     int commandCount = allCommands.size();
                     processorsPerDisplay[displayIndex] = (int) Math.ceil((double) commandCount / COMMANDS_PER_PROCESSOR);
-
                     for (int p = 0; p < processorsPerDisplay[displayIndex]; p++) {
                         int start = p * COMMANDS_PER_PROCESSOR;
                         int end = Math.min(start + COMMANDS_PER_PROCESSOR, commandCount);
@@ -81,7 +74,7 @@ public class LogicCore {
             }
             scaledMasterPixmap.dispose();
 
-            // ВЫЗЫВАЕМ ВАШ АЛГОРИТМ РАЗМЕЩЕНИЯ
+            // 2. Используем ВАШ алгоритм для размещения процессоров
             DisplayProcessorMatrixFinal matrixFinal = new DisplayProcessorMatrixFinal(
                 blueprint.n, blueprint.m, processorsPerDisplay, blueprint.displayCoordinates, displaySize
             );
@@ -89,6 +82,7 @@ public class LogicCore {
             DisplayProcessorMatrixFinal.Cell[][] finalMatrix = matrixFinal.getMatrix();
             DisplayInfo[] finalDisplays = matrixFinal.getDisplays();
 
+            // 3. Собираем чертеж, который будет точной копией вашей матрицы
             return buildSchematic(finalMatrix, finalDisplays, codeMap, displayBlock);
 
         } catch (Exception e) {
@@ -97,52 +91,59 @@ public class LogicCore {
         }
     }
 
-    // ИСПОЛЬЗУЕМ ГАРАНТИРОВАННЫЙ МЕТОД СБОРКИ
     private Schematic buildSchematic(DisplayProcessorMatrixFinal.Cell[][] matrix, DisplayInfo[] displays, Map<Integer, List<String>> codeMap, Block displayBlock) {
         Seq<Stile> tiles = new Seq<>();
         
-        // ЭТАП 1: Размещаем все дисплеи. Ни больше, ни меньше.
-        for (DisplayInfo display : displays) {
-            short schemX = (short)display.center.x;
-            short schemY = (short)display.center.y;
-            tiles.add(new Stile(displayBlock, schemX, schemY, null, (byte) 0));
-        }
-
-        // ЭТАП 2: Размещаем все процессоры.
+        // --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ---
+        // Мы должны читать матрицу так же, как она была создана: matrix[x][y]
         int width = matrix.length;
         int height = matrix[0].length;
 
-        for (int x = 0; x < width; x++) {
-            for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) { // Внешний цикл по X (столбцы)
+            for (int y = 0; y < height; y++) { // Внутренний цикл по Y (строки)
                 DisplayProcessorMatrixFinal.Cell cell = matrix[x][y];
-                
-                if (cell.type == 1 && cell.ownerId >= 0) {
-                    short schemX = (short)x;
-                    short schemY = (short)y;
-                    DisplayInfo ownerDisplay = displays[cell.ownerId];
-                    
-                    String code = "";
-                    List<String> codesForDisplay = codeMap.get(cell.ownerId);
-                    if (codesForDisplay != null && !codesForDisplay.isEmpty()) {
-                        code = codesForDisplay.remove(0);
-                    }
+                if (cell.type == 0) continue;
 
-                    LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
-                    build.tile = new Tile(schemX, schemY);
-                    
-                    build.links.add(new LogicLink(ownerDisplay.center.x, ownerDisplay.center.y, "display1", true));
-                    build.updateCode(code);
-                    
-                    tiles.add(new Stile(Blocks.microProcessor, schemX, schemY, build.config(), (byte) 0));
+                short schemX = (short)x;
+                short schemY = (short)y;
+
+                if (cell.type == 2) { // Это клетка дисплея
+                    // Мы больше не пытаемся "угадать" центр.
+                    // Дисплеи будут поставлены отдельным, гарантированным циклом.
+                    // Здесь мы ничего не делаем, чтобы избежать дубликатов.
+                } else if (cell.type == 1) { // Это процессор
+                    if (cell.ownerId >= 0) {
+                        DisplayInfo ownerDisplay = displays[cell.ownerId];
+                        
+                        String code = "";
+                        List<String> codesForDisplay = codeMap.get(cell.ownerId);
+                        if (codesForDisplay != null && !codesForDisplay.isEmpty()) {
+                            code = codesForDisplay.remove(0);
+                        }
+
+                        LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
+                        build.tile = new Tile(schemX, schemY);
+                        
+                        build.links.add(new LogicLink(ownerDisplay.center.x, ownerDisplay.center.y, "display1", true));
+                        build.updateCode(code);
+                        
+                        tiles.add(new Stile(Blocks.microProcessor, schemX, schemY, build.config(), (byte) 0));
+                    }
                 }
             }
+        }
+
+        // ГАРАНТИРОВАННОЕ РАЗМЕЩЕНИЕ ДИСПЛЕЕВ
+        // Мы проходимся по исходному списку и ставим ровно столько дисплеев, сколько нужно.
+        for (DisplayInfo display : displays) {
+            tiles.add(new Stile(displayBlock, (short)display.center.x, (short)display.center.y, null, (byte) 0));
         }
         
         StringMap tags = new StringMap();
         tags.put("name", "PictureToLogic-Schematic");
         return new Schematic(tiles, tags, width, height);
     }
-
+    
     // ... (остальные вспомогательные методы остаются без изменений) ...
     private List<String> generateCommandList(Map<Integer, List<Rect>> rects, int displayPixelSize, int offsetX, int offsetY) {
         List<String> commands = new ArrayList<>();
