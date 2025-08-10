@@ -4,7 +4,6 @@ import arc.files.Fi;
 import arc.graphics.Pixmap;
 import arc.struct.Seq;
 import arc.struct.StringMap;
-import arc.util.Log;
 import mindustry.content.Blocks;
 import mindustry.game.Schematic;
 import mindustry.game.Schematic.Stile;
@@ -20,11 +19,17 @@ import java.util.Map;
 
 public class LogicCore {
 
-    private static final int COMMANDS_PER_PROCESSOR = 989;
+    // Константа BORDER_SIZE остается, так как она связана с нарезкой изображения
     private static final int BORDER_SIZE = 8;
 
-    public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock) {
+    // Метод теперь принимает instructionsPerProc как параметр
+    public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, int instructionsPerProc) {
         try {
+            // Корректируем значение, полученное от пользователя, для реального использования
+            // Вычитаем 11, чтобы получить реальный лимит (например, 1000 -> 989)
+            final int commandsPerProcessor = instructionsPerProc - 11;
+            WebLogger.info("Real instruction limit per processor: %d", commandsPerProcessor);
+
             int displaySize = displayBlock.size;
             int displayPixelSize = getDisplayPixelSize(displaySize);
             int totalWidth = (displaysX * displayPixelSize) + (Math.max(0, displaysX - 1) * BORDER_SIZE * 2);
@@ -53,14 +58,17 @@ public class LogicCore {
                     finalSlice.draw(scaledMasterPixmap, subX, subY, sliceWidth, sliceHeight, 0, 0, sliceWidth, sliceHeight);
                     ImageProcessor processor = new ImageProcessor(finalSlice);
                     Map<Integer, List<Rect>> rects = processor.groupOptimal();
-                    int offsetX = (j > 0) ? BORDER_SIZE : 0;
+                    int offsetX = (j > 0 ? BORDER_SIZE : 0);
                     int offsetY = (i > 0) ? BORDER_SIZE : 0;
                     List<String> allCommands = generateCommandList(rects, displayPixelSize, offsetX, offsetY);
                     int commandCount = allCommands.size();
-                    processorsPerDisplay[displayIndex] = (int) Math.ceil((double) commandCount / COMMANDS_PER_PROCESSOR);
+                    
+                    // Используем скорректированное значение для расчета
+                    processorsPerDisplay[displayIndex] = (int) Math.ceil((double) commandCount / commandsPerProcessor);
+                    
                     for (int p = 0; p < processorsPerDisplay[displayIndex]; p++) {
-                        int start = p * COMMANDS_PER_PROCESSOR;
-                        int end = Math.min(start + COMMANDS_PER_PROCESSOR, commandCount);
+                        int start = p * commandsPerProcessor;
+                        int end = Math.min(start + commandsPerProcessor, commandCount);
                         List<String> chunk = allCommands.subList(start, end);
                         StringBuilder codeBuilder = new StringBuilder();
                         chunk.forEach(command -> codeBuilder.append(command).append("\n"));
@@ -127,7 +135,6 @@ public class LogicCore {
             short finalX = (short)display.bottomLeft.x;
             short finalY = (short)display.bottomLeft.y;
 
-            // --- ТВОИ ФИНАЛЬНЫЕ ИЗМЕНЕНИЯ ---
             if (displayBlock.size == 6) {
                 finalX += 2;
                 finalY += 2;
@@ -137,7 +144,6 @@ public class LogicCore {
                 finalX += 1;
                 finalY += 1;
             }
-            // ------------------------------------
 
             tiles.add(new Stile(displayBlock, finalX, finalY, null, (byte) 0));
         }

@@ -19,22 +19,16 @@ public class ModUI {
     private static LogicDisplay selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay;
     private static boolean showDebug = true;
 
-    private static Slider xSlider, ySlider;
-    private static Label xLabel, yLabel;
+    private static Slider xSlider, ySlider, instructionsSlider;
+    private static Label xLabel, yLabel, instructionsLabel;
     private static Table previewTable;
 
     public static void build() {
         try {
             Table schematicsButtons = Vars.ui.schematics.buttons;
-
-            // --- ИСПРАВЛЕНИЕ ОШИБКИ 1 ---
-            // Сначала создаем кнопку через хелпер и получаем ее ячейку (Cell).
             Cell<TextButton> buttonCell = schematicsButtons.button("PictureToLogic", Icon.image, ModUI::showSettingsDialog);
-            // Затем из ячейки достаем саму кнопку (.get()) и передаем ее в логгер.
             WebLogger.logClick(buttonCell.get(), "Open Settings");
-            // Настраиваем саму ячейку.
             buttonCell.size(180, 64).padLeft(6);
-
         } catch (Exception e) {
             WebLogger.err("Failed to build PictureToLogic UI!", e);
         }
@@ -47,31 +41,46 @@ public class ModUI {
         Table content = dialog.cont;
         content.defaults().pad(8);
 
+        // --- Верхняя панель: Слайдеры и предпросмотр ---
         Table topPanel = new Table();
         Table sliders = new Table();
         sliders.defaults().pad(2);
 
+        // Слайдер для X
         xSlider = WebLogger.logChange(new Slider(1, 10, 1, false), "Displays X");
-        ySlider = WebLogger.logChange(new Slider(1, 10, 1, false), "Displays Y");
         xLabel = new Label("1");
-        yLabel = new Label("1");
-
         sliders.add("Дисплеев по X:").left();
         sliders.add(xSlider).width(200f).padLeft(10).padRight(10);
-        sliders.add(xLabel).left();
+        sliders.add(xLabel).left().minWidth(25);
         sliders.row();
 
+        // Слайдер для Y
+        ySlider = WebLogger.logChange(new Slider(1, 10, 1, false), "Displays Y");
+        yLabel = new Label("1");
         sliders.add("Дисплеев по Y:").left();
         sliders.add(ySlider).width(200f).padLeft(10).padRight(10);
-        sliders.add(yLabel).left();
+        sliders.add(yLabel).left().minWidth(25);
+        sliders.row();
 
+        // --- НОВЫЙ СЛАЙДЕР: Инструкций на процессор ---
+        instructionsSlider = WebLogger.logChange(new Slider(1, 10, 1, false), "Instructions per Processor");
+        instructionsSlider.setValue(10); // По умолчанию 10 * 100 = 1000
+        instructionsLabel = new Label("1000");
+        sliders.add("Инструкций/проц:").left();
+        sliders.add(instructionsSlider).width(200f).padLeft(10).padRight(10);
+        sliders.add(instructionsLabel).left().minWidth(40); // Больше места для четырехзначного числа
+        sliders.row();
+
+        // Панель предпросмотра
         previewTable = new Table();
         previewTable.setBackground(Tex.buttonDown);
 
+        // ИСПРАВЛЕНО: Добавляем sliders в отдельную ячейку, чтобы предпросмотр не влиял на них
         topPanel.add(sliders);
-        topPanel.add(previewTable).padLeft(20);
+        topPanel.add(previewTable).padLeft(20).top(); // .top() чтобы выровнять по верху
         content.add(topPanel).row();
 
+        // --- Средняя панель: Выбор типа дисплея ---
         content.add("Тип дисплея:").left().padTop(20).row();
         Table displaySelector = new Table();
         ButtonGroup<TextButton> group = new ButtonGroup<>();
@@ -101,13 +110,12 @@ public class ModUI {
         displaySelector.add(largeLogicDisplayButton).size(240, 60).padLeft(10);
         content.add(displaySelector).row();
 
+        // --- Нижняя панель: Опции и действия ---
         CheckBox debugCheckBox = new CheckBox("Показывать отладочное окно");
         debugCheckBox.setChecked(showDebug);
         debugCheckBox.changed(() -> showDebug = debugCheckBox.isChecked());
         content.add(WebLogger.logToggle(debugCheckBox, "Show Debug Window")).left().padTop(20).row();
 
-        // --- ИСПРАВЛЕНИЕ ОШИБКИ 2 ---
-        // Используем тот же подход: создаем кнопку через хелпер `content.button`, который правильно работает с иконками.
         Runnable fileChooserAction = () -> WebLogger.logFileChooser(file -> {
             if (file != null) {
                 dialog.hide();
@@ -118,7 +126,7 @@ public class ModUI {
         WebLogger.logClick(selectFileCell.get(), "Select Image and Create");
         selectFileCell.padTop(20).growX().height(60);
 
-
+        // --- Инициализация и слушатели ---
         xSlider.changed(() -> {
             xLabel.setText(String.valueOf((int)xSlider.getValue()));
             updatePreview();
@@ -126,6 +134,10 @@ public class ModUI {
         ySlider.changed(() -> {
             yLabel.setText(String.valueOf((int)ySlider.getValue()));
             updatePreview();
+        });
+        // Слушатель для нового слайдера
+        instructionsSlider.changed(() -> {
+            instructionsLabel.setText(String.valueOf((int)instructionsSlider.getValue() * 100));
         });
         updatePreview();
 
@@ -147,19 +159,24 @@ public class ModUI {
 
     private static void generateAndShowSchematic(Fi imageFile) {
         Vars.ui.loadfrag.show("Обработка изображения...");
+        
+        // Получаем значения из UI
+        int displaysX = (int) xSlider.getValue();
+        int displaysY = (int) ySlider.getValue();
+        int instructionsPerProc = (int) instructionsSlider.getValue() * 100;
+
         WebLogger.info("--- Starting Image Processing ---");
         WebLogger.info("File: %s", imageFile.name());
-        WebLogger.info("Grid: %dx%d", (int)xSlider.getValue(), (int)ySlider.getValue());
+        WebLogger.info("Grid: %dx%d", displaysX, displaysY);
         WebLogger.info("Display Type: %s", selectedDisplay.name);
+        WebLogger.info("Instructions per Processor: %d", instructionsPerProc);
 
         new Thread(() -> {
             ProcessingResult result = null;
             try {
-                int displaysX = (int) xSlider.getValue();
-                int displaysY = (int) ySlider.getValue();
-
                 LogicCore logic = new LogicCore();
-                result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay);
+                // Передаем новое значение в ядро логики
+                result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay, instructionsPerProc);
             } catch (Exception e) {
                 WebLogger.err("Критическая ошибка при создании чертежа!", e);
             } finally {
