@@ -10,7 +10,6 @@ java {
 
 ext {
     mindustryVersion = "v147"
-    // Переменная для определения, запущена ли сборка на Windows
     isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
 }
 
@@ -30,16 +29,13 @@ dependencies {
     compileOnly "com.github.Anuken.Arc:arc-core:${mindustryVersion}"
 }
 
-// Эта задача теперь собирает JAR только для ПК
 jar {
     archiveBaseName = "${project.name}-Desktop"
 }
 
-// Новая задача, которая конвертирует ПК-версию в Android-версию
 task jarAndroid (type: Jar, dependsOn: jar){
     archiveBaseName = "${project.name}-Android"
     from(zipTree(jar.archiveFile))
-    // Используем инструмент d8 из Android SDK для конвертации
     doLast{
         def d8 = new File(System.getenv("ANDROID_HOME"), "build-tools/${findLatestBuildTools()}/d8" + (isWindows ? ".bat" : ""))
         exec{
@@ -48,13 +44,19 @@ task jarAndroid (type: Jar, dependsOn: jar){
     }
 }
 
-// Финальная задача, которая собирает универсальный JAR
+// ИЗМЕНЕНО: Добавляем блок doLast для очистки
 task deploy(type: Jar, dependsOn: jarAndroid) {
     archiveBaseName = project.name
     from(zipTree(jar.archiveFile), zipTree(jarAndroid.archiveFile))
+
+    // Этот блок выполнится после создания финального .jar
+    // и удалит временные файлы.
+    doLast {
+        delete(jar.archiveFile)
+        delete(jarAndroid.archiveFile)
+    }
 }
 
-// Вспомогательная функция для поиска последней версии build-tools
 String findLatestBuildTools(){
     def buildTools = new File(System.getenv("ANDROID_HOME"), "build-tools")
     if(!buildTools.exists()) return ""
