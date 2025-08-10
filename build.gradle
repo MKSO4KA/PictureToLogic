@@ -34,12 +34,14 @@ dependencies {
 
 // Конфигурация задачи сборки JAR-файла
 jar {
-    // Указываем, что нужно включить файл mod.hjson из папки resources
-    from('src/main/resources') {
-        include 'mod.hjson'
-    }
     // Указываем имя итогового файла
-    archiveBaseName = 'MatrixProcessor'
+    archiveBaseName = 'PictureToLogic'
+
+    // Включаем все файлы из папки 'resources' (включая mod.hjson)
+    // в корень итогового JAR-файла.
+    from('src/main/resources') {
+        include '*'
+    }
 }
 
 test {
