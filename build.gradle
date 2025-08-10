@@ -2,7 +2,6 @@ plugins {
     id 'java'
 }
 
-// Используем toolchain для 100% совместимости с Java 8
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(8)
@@ -10,7 +9,6 @@ java {
 }
 
 ext {
-    // ИЗМЕНЕНО: Указываем желаемую версию v147
     mindustryVersion = "v147" 
 }
 
@@ -20,9 +18,7 @@ sourceCompatibility = 1.8
 
 repositories {
     mavenCentral()
-    // ИЗМЕНЕНО: Добавляем специальный репозиторий, где лежат новые версии
     maven { url "https://raw.githubusercontent.com/Zelaux/MindustryRepo/master/repository" }
-    // Стандартные репозитории оставляем
     maven { url "https://raw.githubusercontent.com/Anuken/Mindustry/mvn-repo/repository" }
     maven { url "https://jitpack.io" }
 }
@@ -31,17 +27,15 @@ dependencies {
     testImplementation platform('org.junit:junit-bom:5.10.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
 
-    // Подключаем зависимости версии v147
     compileOnly "com.github.Anuken.Mindustry:core:${mindustryVersion}"
     compileOnly "com.github.Anuken.Arc:arc-core:${mindustryVersion}"
 }
 
-// Упаковываем JAR
+// ИЗМЕНЕНО: Убираем лишнюю инструкцию 'from'
 jar {
+    // Оставляем только настройку имени файла.
+    // Gradle сам добавит ресурсы из src/main/resources.
     archiveBaseName = 'PictureToLogic'
-    from('src/main/resources') {
-        include '*'
-    }
 }
 
 test {
