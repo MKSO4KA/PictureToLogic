@@ -1,80 +1,47 @@
-apply plugin: "java"
+plugins {
+    id 'java'
+}
 
-version '1.0'
+// Переменная для версии игры, чтобы легко ее менять
+ext {
+    mindustryVersion = "v150" // Используйте актуальную версию Mindustry
+}
 
-sourceSets.main.java.srcDirs = ["src"]
+group = 'com.mkso4ka.mindustry.matrixproc'
+version = '1.0-SNAPSHOT'
+sourceCompatibility = 1.8 // Mindustry использует Java 8
 
-repositories{
+repositories {
     mavenCentral()
-    maven{ url "https://raw.githubusercontent.com/Zelaux/MindustryRepo/master/repository" }
-    maven{ url 'https://www.jitpack.io' }
+    // Репозиторий, где хранятся библиотеки Mindustry
+    maven { url "https://raw.githubusercontent.com/Anuken/Mindustry/mvn-repo/repository" }
+    // Репозиторий для библиотеки Arc (графический движок Mindustry)
+    maven { url "https://jitpack.io" }
 }
 
-java{
-    targetCompatibility = 8
-    sourceCompatibility = JavaVersion.VERSION_17
+dependencies {
+    // Зависимости для тестов (у вас уже были)
+    testImplementation platform('org.junit:junit-bom:5.10.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+
+    // !!! КЛЮЧЕВАЯ ЗАВИСИМОСТЬ !!!
+    // Мы подключаем ядро Mindustry.
+    // 'compileOnly' означает, что эти классы нужны только для компиляции,
+    // так как в самой игре они уже будут предоставлены.
+    compileOnly "com.github.Anuken.Mindustry:core:${mindustryVersion}"
+    compileOnly "com.github.Anuken.Arc:arc-core:${mindustryVersion}"
 }
 
-ext{
-    mindustryVersion = 'v150.1' // Версия Mindustry, под которую собираем
-    jabelVersion = "93fde537c7"
-    isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
-    sdkRoot = System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
-}
-
-allprojects{
-    tasks.withType(JavaCompile){
-        options.compilerArgs.addAll(['--release', '8'])
+// Конфигурация задачи сборки JAR-файла
+jar {
+    // Указываем, что нужно включить файл mod.hjson из папки resources
+    from('src/main/resources') {
+        include 'mod.hjson'
     }
+    // Указываем имя итогового файла
+    archiveBaseName = 'MatrixProcessor'
 }
 
-dependencies{
-    compileOnly "com.github.Anuken.Arc:arc-core:$mindustryVersion"
-    compileOnly "com.github.Anuken.Mindustry:core:$mindustryVersion"
-    annotationProcessor "com.github.Anuken:jabel:$jabelVersion"
-}
-
-configurations.all{
-    resolutionStrategy.eachDependency { details ->
-        if(details.requested.group == 'com.github.Anuken.Arc'){
-            details.useVersion "$mindustryVersion"
-        }
-    }
-}
-
-task jarAndroid{
-    dependsOn "jar"
-    doLast{
-        if(!sdkRoot || !new File(sdkRoot).exists()) throw new GradleException("No valid Android SDK found on the build server. Ensure that ANDROID_HOME is set.");
-        def platformRoot = new File("$sdkRoot/platforms/").listFiles().sort().reverse().find{ f -> new File(f, "android.jar").exists()}
-        if(!platformRoot) throw new GradleException("No android.jar found. Ensure that you have an Android platform installed.")
-        def dependencies = (configurations.compileClasspath.asList() + configurations.runtimeClasspath.asList() + [new File(platformRoot, "android.jar")]).collect{ "--classpath $it.path" }.join(" ")
-        def d8 = isWindows ? "d8.bat" : "d8"
-        "$d8 $dependencies --min-api 14 --output ${project.archivesBaseName}Android.jar ${project.archivesBaseName}Desktop.jar"
-            .execute(null, new File("$buildDir/libs")).waitForProcessOutput(System.out, System.err)
-    }
-}
-
-jar{
-    archiveFileName = "${project.archivesBaseName}Desktop.jar"
-    from{
-        configurations.runtimeClasspath.collect{ it.isDirectory() ? it : zipTree(it) }
-    }
-    from(projectDir){
-        include "mod.hjson"
-        include "assets/**"
-    }
-}
-
-task deploy(type: Jar){
-    dependsOn jarAndroid
-    dependsOn jar
-    archiveFileName = "${project.archivesBaseName}.jar"
-    from{ [zipTree("$buildDir/libs/${project.archivesBaseName}Desktop.jar"), zipTree("$buildDir/libs/${project.archivesBaseName}Android.jar")] }
-    doLast{
-        delete{
-            delete "$buildDir/libs/${project.archivesBaseName}Desktop.jar"
-            delete "$buildDir/libs/${project.archivesBaseName}Android.jar"
-        }
-    }
+test {
+    useJUnitPlatform()
 }
