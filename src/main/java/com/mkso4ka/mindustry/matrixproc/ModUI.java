@@ -1,9 +1,8 @@
 package com.mkso4ka.mindustry.matrixproc;
 
-// import arc.Core; // Core больше не нужен для этой цели, можно убрать
 import arc.files.Fi;
 import arc.util.Log;
-import mindustry.Vars; // НАШ ГЛАВНЫЙ ИНСТРУМЕНТ
+import mindustry.Vars;
 import mindustry.gen.Icon;
 import mindustry.ui.dialogs.BaseDialog;
 import mindustry.ui.Styles;
@@ -44,15 +43,20 @@ public class ModUI {
         dialog.cont.add(displaysYField).width(100f).row();
 
         dialog.cont.button("Выбрать изображение...", Icon.file, () -> {
-            // ИЗМЕНЕНО: Вызываем файловый диалог через Vars.platform
             Vars.platform.showFileChooser(true, "Выбор изображения", "png", file -> {
-                if (file != null && file.exists()) {
-                    Log.info("Выбран файл: " + file.path());
-                    Vars.ui.showInfo("Выбран файл: " + file.name());
+                // ИЗМЕНЕНО: Убираем проверку file.exists()
+                // Если система вернула нам объект файла, мы доверяем ему.
+                if (file != null) {
+                    // Добавляем больше логов для отладки
+                    Log.info("File object received. Path: " + file.path());
+                    Log.info("Is readable: " + file.read()); // Проверим, можно ли его читать
 
+                    // Сразу пытаемся запустить генерацию.
+                    // Вся проверка будет внутри этого метода.
                     generateSchematic(file);
                     dialog.hide();
                 } else {
+                    // Эта ветка сработает, если пользователь просто закрыл диалог, не выбрав файл.
                     Vars.ui.showInfo("Файл не выбран.");
                 }
             });
@@ -65,6 +69,7 @@ public class ModUI {
     }
 
     private static void generateSchematic(Fi imageFile) {
+        // ИЗМЕНЕНО: Оборачиваем ВЕСЬ метод в try-catch
         try {
             int displaysX = Integer.parseInt(displaysXField.getText());
             int displaysY = Integer.parseInt(displaysYField.getText());
@@ -72,14 +77,20 @@ public class ModUI {
             Log.info("Начинаем генерацию для файла " + imageFile.name());
             Log.info("Размер сетки дисплеев: " + displaysX + "x" + displaysY);
 
+            // Настоящая проверка происходит здесь.
+            // Если файл нечитаемый, эта строка выбросит исключение.
             byte[] imageBytes = imageFile.readBytes();
 
-            // Здесь будет ваш код
-            Vars.ui.showInfo("Генерация будет добавлена позже!");
+            Log.info("Файл успешно прочитан, размер: " + imageBytes.length + " байт.");
+
+            // Здесь будет ваш код для обработки изображения
+            Vars.ui.showInfo("Файл успешно прочитан!");
 
         } catch (Exception e) {
-            Log.err("Ошибка при генерации чертежа!", e);
-            Vars.ui.showException("Ошибка генерации", e);
+            // Если что-то пошло не так (файл не удалось прочитать),
+            // мы поймаем ошибку здесь и сообщим пользователю.
+            Log.err("Не удалось прочитать или обработать выбранный файл!", e);
+            Vars.ui.showException("Ошибка чтения файла", e);
         }
     }
 }
