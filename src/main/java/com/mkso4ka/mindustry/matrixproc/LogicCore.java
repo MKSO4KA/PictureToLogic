@@ -112,7 +112,6 @@ public class LogicCore {
                     LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
                     build.tile = new Tile(schemX, schemY);
                     
-                    // Точка для связи остается прежней, она рассчитывается от "математической" позиции дисплея
                     int linkToX = ownerDisplay.bottomLeft.x + displayBlock.size / 2;
                     int linkToY = ownerDisplay.bottomLeft.y + displayBlock.size / 2;
                     
@@ -124,14 +123,11 @@ public class LogicCore {
             }
         }
 
-        // Размещаем дисплеи по их нижним левым углам
         for (DisplayInfo display : displays) {
             short finalX = (short)display.bottomLeft.x;
             short finalY = (short)display.bottomLeft.y;
 
-            // --- ФИНАЛЬНОЕ ИЗМЕНЕНИЕ: Смещение для больших дисплеев ---
-            // Если это большой дисплей (6x6), сдвигаем его на 1 клетку влево и вниз
-            // только на этапе строительства чертежа.
+            // --- ТВОИ ФИНАЛЬНЫЕ ИЗМЕНЕНИЯ ---
             if (displayBlock.size == 6) {
                 finalX += 2;
                 finalY += 2;
@@ -141,7 +137,7 @@ public class LogicCore {
                 finalX += 1;
                 finalY += 1;
             }
-            // ---------------------------------------------------------
+            // ------------------------------------
 
             tiles.add(new Stile(displayBlock, finalX, finalY, null, (byte) 0));
         }

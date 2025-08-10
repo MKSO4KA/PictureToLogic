@@ -22,6 +22,8 @@ public class ModUI {
     private static TextField displaysXField;
     private static TextField displaysYField;
     private static LogicDisplay selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay;
+    // НОВАЯ ПЕРЕМЕННАЯ: Флаг для управления показом отладочного окна
+    private static boolean showDebug = true;
 
     public static void build() {
         try {
@@ -55,6 +57,9 @@ public class ModUI {
             selectedDisplay = d;
         });
         content.add(displaySelector).colspan(2).left().row();
+
+        // НОВЫЙ ЭЛЕМЕНТ: Галочка для включения/отключения отладки
+        content.check("Показывать отладочное окно", showDebug, b -> showDebug = b).colspan(2).left().padTop(10).row();
 
         content.button("Выбрать и создать чертеж", Icon.file, () -> {
             Vars.platform.showFileChooser(true, "Выбор изображения", "png", file -> {
@@ -90,7 +95,14 @@ public class ModUI {
                 ProcessingResult finalResult = result;
                 Core.app.post(() -> {
                     if (finalResult != null && finalResult.schematic != null) {
-                        showDebugDialog(finalResult);
+                        // ИЗМЕНЕНО: Проверяем флаг перед показом диалога
+                        if (showDebug) {
+                            showDebugDialog(finalResult);
+                        } else {
+                            // Если дебаг отключен, сразу строим схему
+                            Vars.ui.schematics.hide();
+                            Vars.control.input.useSchematic(finalResult.schematic);
+                        }
                     } else {
                         Vars.ui.showInfo("[scarlet]Не удалось создать чертеж. Проверьте логи.[]");
                     }
@@ -141,8 +153,6 @@ public class ModUI {
 
         Table content = dialog.cont;
         Label label = new Label(debugText);
-        // ИСПРАВЛЕНО: Удалена строка, вызывавшая ошибку компиляции.
-        // label.setStyle(Styles.monoLabel); // <-- ОШИБОЧНАЯ СТРОКА
         ScrollPane scroll = new ScrollPane(label, Styles.defaultPane);
         content.add(scroll).grow().width(Core.graphics.getWidth() * 0.8f).height(Core.graphics.getHeight() * 0.7f);
 
