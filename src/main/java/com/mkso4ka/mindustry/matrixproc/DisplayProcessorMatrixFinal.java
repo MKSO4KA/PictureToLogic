@@ -21,7 +21,6 @@ class DisplayProcessorMatrixFinal {
     static class Cell {
         int type = 0;
         int ownerId = -1;
-        // НОВОЕ ПОЛЕ: Хранит порядковый номер процессора для его владельца (0, 1, 2...)
         int processorIndex = -1;
     }
 
@@ -72,49 +71,28 @@ class DisplayProcessorMatrixFinal {
     }
 
     public void placeProcessors() {
-        // --- ЭТАП 1: Определяем всю разрешенную территорию для процессоров ---
+        // --- ЭТАП 1: Прямое определение разрешенной территории (ИСПРАВЛЕНО) ---
+        Log.info("Этап 1: Определение всей разрешенной территории...");
         boolean[][] isAllowed = new boolean[n][m];
-        boolean[][] visitedForTerritory = new boolean[n][m];
-        Queue<Point2> territoryQueue = new LinkedList<>();
-
+        
+        // Просто проходим по каждой клетке и проверяем, может ли тут стоять процессор.
+        // Это надежнее, чем заливка от краев.
         for (int y = 0; y < n; y++) {
             for (int x = 0; x < m; x++) {
-                if (matrix[y][x].type == 2) {
-                    for (int dy = -1; dy <= 1; dy++) {
-                        for (int dx = -1; dx <= 1; dx++) {
-                            if (dx == 0 && dy == 0) continue;
-                            int nx = x + dx;
-                            int ny = y + dy;
-                            if (nx >= 0 && nx < m && ny >= 0 && ny < n && matrix[ny][nx].type == 0 && !visitedForTerritory[ny][nx] && isWithinProcessorReachOfAnyDisplay(new Point2(nx, ny))) {
-                                territoryQueue.add(new Point2(nx, ny));
-                                visitedForTerritory[ny][nx] = true;
-                            }
-                        }
-                    }
+                if (matrix[y][x].type == 0 && isWithinProcessorReachOfAnyDisplay(new Point2(x, y))) {
+                    isAllowed[y][x] = true;
                 }
             }
         }
-
-        while (!territoryQueue.isEmpty()) {
-            Point2 current = territoryQueue.poll();
-            isAllowed[current.y][current.x] = true;
-            for (int dy = -1; dy <= 1; dy++) {
-                for (int dx = -1; dx <= 1; dx++) {
-                    if (dx == 0 && dy == 0) continue;
-                    int nx = current.x + dx;
-                    int ny = current.y + dy;
-                    if (nx >= 0 && nx < m && ny >= 0 && ny < n && matrix[ny][nx].type == 0 && !visitedForTerritory[ny][nx] && isWithinProcessorReachOfAnyDisplay(new Point2(nx, ny))) {
-                        territoryQueue.add(new Point2(nx, ny));
-                        visitedForTerritory[ny][nx] = true;
-                    }
-                }
-            }
-        }
+        Log.info("Территория определена.");
 
         // --- ЭТАП 2: Параллельная заливка (BFS) от каждого дисплея для компактного размещения ---
+        Log.info("Этап 2: Формирование компактных кластеров процессоров...");
         Queue<ProcessorCandidate> placementQueue = new LinkedList<>();
         boolean[][] visitedForPlacement = new boolean[n][m];
 
+        // Инициализируем очередь начальными точками от каждого дисплея.
+        // Теперь это будет работать и для внутренних дисплеев, т.к. isAllowed для них корректна.
         for (DisplayInfo display : displays) {
             for (int y = 0; y < n; y++) {
                 for (int x = 0; x < m; x++) {
@@ -137,15 +115,13 @@ class DisplayProcessorMatrixFinal {
             }
         }
 
+        // Основной цикл "волнового" размещения
         while (!placementQueue.isEmpty()) {
             ProcessorCandidate candidate = placementQueue.poll();
             DisplayInfo owner = displays[candidate.ownerId];
 
             if (owner.getProcessorsNeeded() > 0) {
-                // --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
-                // Присваиваем процессору его порядковый номер, перед тем как увеличить счетчик.
                 matrix[candidate.location.y][candidate.location.x].processorIndex = owner.processorsPlaced;
-                
                 matrix[candidate.location.y][candidate.location.x].type = 1;
                 matrix[candidate.location.y][candidate.location.x].ownerId = owner.id;
                 owner.processorsPlaced++;
@@ -165,6 +141,7 @@ class DisplayProcessorMatrixFinal {
                 }
             }
         }
+        Log.info("Размещение завершено.");
     }
 
     private boolean isWithinProcessorReachOfAnyDisplay(Point2 p) {
