@@ -2,19 +2,22 @@ package com.mkso4ka.mindustry.matrixproc;
 
 import arc.math.geom.Point2;
 import arc.util.Log;
-import java.util.LinkedList;
-import java.util.Queue;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 class DisplayProcessorMatrixFinal {
 
-    // Вспомогательный класс для хранения кандидата в очереди
-    private static class ProcessorCandidate {
+    // Вспомогательный класс для хранения точки и расстояния до нее
+    private static class Spot {
         final Point2 location;
-        final int ownerId;
+        final double distanceSq;
 
-        ProcessorCandidate(Point2 location, int ownerId) {
+        Spot(Point2 location, double distanceSq) {
             this.location = location;
-            this.ownerId = ownerId;
+            this.distanceSq = distanceSq;
         }
     }
 
@@ -70,87 +73,74 @@ class DisplayProcessorMatrixFinal {
         }
     }
 
+    // --- АЛГОРИТМ СТРАТЕГИЧЕСКОГО РАСПРЕДЕЛЕНИЯ С ПРИОРИТЕТОМ ---
     public void placeProcessors() {
-        // --- ЭТАП 1: Прямое определение разрешенной территории (ИСПРАВЛЕНО) ---
-        Log.info("Этап 1: Определение всей разрешенной территории...");
-        boolean[][] isAllowed = new boolean[n][m];
-        
-        // Просто проходим по каждой клетке и проверяем, может ли тут стоять процессор.
-        // Это надежнее, чем заливка от краев.
-        for (int y = 0; y < n; y++) {
-            for (int x = 0; x < m; x++) {
-                if (matrix[y][x].type == 0 && isWithinProcessorReachOfAnyDisplay(new Point2(x, y))) {
-                    isAllowed[y][x] = true;
-                }
-            }
-        }
-        Log.info("Территория определена.");
+        Log.info("Запуск стратегического алгоритма с приоритетом по нужде...");
 
-        // --- ЭТАП 2: Параллельная заливка (BFS) от каждого дисплея для компактного размещения ---
-        Log.info("Этап 2: Формирование компактных кластеров процессоров...");
-        Queue<ProcessorCandidate> placementQueue = new LinkedList<>();
-        boolean[][] visitedForPlacement = new boolean[n][m];
+        // --- ЭТАП 1: Инвентаризация доступных мест для каждого дисплея ---
+        Log.info("Этап 1: Инвентаризация всех доступных мест...");
+        Map<Integer, List<Spot>> reachableSpotsByDisplay = new HashMap<>();
+        boolean[][] isSpotTaken = new boolean[n][m];
 
-        // Инициализируем очередь начальными точками от каждого дисплея.
-        // Теперь это будет работать и для внутренних дисплеев, т.к. isAllowed для них корректна.
         for (DisplayInfo display : displays) {
+            List<Spot> spots = new ArrayList<>();
             for (int y = 0; y < n; y++) {
                 for (int x = 0; x < m; x++) {
-                    if (matrix[y][x].type == 2 && matrix[y][x].ownerId == display.id) {
-                        for (int dy = -1; dy <= 1; dy++) {
-                            for (int dx = -1; dx <= 1; dx++) {
-                                if (dx == 0 && dy == 0) continue;
-                                int nx = x + dx;
-                                int ny = y + dy;
-                                if (nx >= 0 && nx < m && ny >= 0 && ny < n && isAllowed[ny][nx] && !visitedForPlacement[ny][nx]) {
-                                    if (distanceSqFromPointToRectangle(new Point2(nx, ny), display) <= PROCESSOR_REACH_SQ) {
-                                        placementQueue.add(new ProcessorCandidate(new Point2(nx, ny), display.id));
-                                        visitedForPlacement[ny][nx] = true;
-                                    }
-                                }
-                            }
+                    if (matrix[y][x].type == 0) { // Если клетка пустая
+                        Point2 p = new Point2(x, y);
+                        double distSq = distanceSqFromPointToRectangle(p, display);
+                        if (distSq <= PROCESSOR_REACH_SQ) {
+                            spots.add(new Spot(p, distSq));
                         }
                     }
                 }
             }
+            // Сортируем места для этого дисплея по расстоянию (от ближайшего к дальнему)
+            spots.sort(Comparator.comparingDouble(s -> s.distanceSq));
+            reachableSpotsByDisplay.put(display.id, spots);
         }
 
-        // Основной цикл "волнового" размещения
-        while (!placementQueue.isEmpty()) {
-            ProcessorCandidate candidate = placementQueue.poll();
-            DisplayInfo owner = displays[candidate.ownerId];
+        // --- ЭТАП 2: Приоритезация дисплеев по "голоду" ---
+        Log.info("Этап 2: Приоритезация дисплеев по количеству требуемых процессоров...");
+        List<DisplayInfo> sortedDisplays = new ArrayList<>();
+        for (DisplayInfo d : displays) {
+            sortedDisplays.add(d);
+        }
+        // Сортируем от самого нуждающегося к наименее
+        sortedDisplays.sort(Comparator.comparingInt(DisplayInfo::getProcessorsNeeded).reversed());
 
-            if (owner.getProcessorsNeeded() > 0) {
-                matrix[candidate.location.y][candidate.location.x].processorIndex = owner.processorsPlaced;
-                matrix[candidate.location.y][candidate.location.x].type = 1;
-                matrix[candidate.location.y][candidate.location.x].ownerId = owner.id;
-                owner.processorsPlaced++;
+        // --- ЭТАП 3: Распределение с учетом приоритета ---
+        Log.info("Этап 3: Распределение мест...");
+        for (DisplayInfo display : sortedDisplays) {
+            int needed = display.getProcessorsNeeded();
+            if (needed == 0) continue;
 
-                for (int dy = -1; dy <= 1; dy++) {
-                    for (int dx = -1; dx <= 1; dx++) {
-                        if (dx == 0 && dy == 0) continue;
-                        int nx = candidate.location.x + dx;
-                        int ny = candidate.location.y + dy;
-                        if (nx >= 0 && nx < m && ny >= 0 && ny < n && isAllowed[ny][nx] && !visitedForPlacement[ny][nx]) {
-                            if (distanceSqFromPointToRectangle(new Point2(nx, ny), owner) <= PROCESSOR_REACH_SQ) {
-                                placementQueue.add(new ProcessorCandidate(new Point2(nx, ny), owner.id));
-                                visitedForPlacement[ny][nx] = true;
-                            }
-                        }
-                    }
+            Log.info(" -> Обслуживаем дисплей " + display.id + " (требуется " + needed + " процессоров)");
+            int placedCount = 0;
+            List<Spot> potentialSpots = reachableSpotsByDisplay.get(display.id);
+
+            for (Spot spot : potentialSpots) {
+                if (placedCount >= needed) {
+                    break; // Этот дисплей уже получил всё, что ему нужно
                 }
+
+                Point2 loc = spot.location;
+                // Если это место еще не занято другим, более приоритетным дисплеем
+                if (!isSpotTaken[loc.y][loc.x]) {
+                    matrix[loc.y][loc.x].type = 1;
+                    matrix[loc.y][loc.x].ownerId = display.id;
+                    matrix[loc.y][loc.x].processorIndex = display.processorsPlaced;
+                    display.processorsPlaced++;
+                    
+                    isSpotTaken[loc.y][loc.x] = true; // Занимаем место
+                    placedCount++;
+                }
+            }
+            if (placedCount < needed) {
+                Log.warn("   -> ВНИМАНИЕ: Дисплей " + display.id + " получил только " + placedCount + " из " + needed + " процессоров. Не хватило физического места.");
             }
         }
         Log.info("Размещение завершено.");
-    }
-
-    private boolean isWithinProcessorReachOfAnyDisplay(Point2 p) {
-        for (DisplayInfo display : displays) {
-            if (distanceSqFromPointToRectangle(p, display) <= PROCESSOR_REACH_SQ) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private double distanceSqFromPointToRectangle(Point2 p, DisplayInfo display) {
