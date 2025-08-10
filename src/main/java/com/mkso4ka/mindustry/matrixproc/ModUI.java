@@ -5,7 +5,6 @@ import arc.files.Fi;
 import arc.scene.ui.*;
 import arc.scene.ui.layout.Cell;
 import arc.scene.ui.layout.Table;
-import arc.util.Log;
 import mindustry.Vars;
 import mindustry.content.Blocks;
 import mindustry.gen.Icon;
@@ -68,14 +67,12 @@ public class ModUI {
         sliders.add(toleranceLabel).padTop(10);
         sliders.row();
 
-        // --- НОВЫЙ СЛАЙДЕР ДЛЯ КОЛИЧЕСТВА ИНСТРУКЦИЙ ---
         instructionsSlider = WebLogger.logChange(new Slider(100, 1000, 100, false), "Max Instructions");
-        instructionsSlider.setValue(1000); // По умолчанию максимум
+        instructionsSlider.setValue(1000);
         instructionsLabel = new Label("1000");
         sliders.add("Макс. инструкций:").padTop(10);
         sliders.add(instructionsSlider).width(200f).padLeft(10).padRight(10).padTop(10);
         sliders.add(instructionsLabel).padTop(10);
-        // ------------------------------------------------
 
         previewTable = new Table();
         previewTable.setBackground(Tex.buttonDown);
@@ -113,10 +110,16 @@ public class ModUI {
         displaySelector.add(largeLogicDisplayButton).size(240, 60).padLeft(10);
         content.add(displaySelector).row();
 
+        if (WebLogger.ENABLE_WEB_LOGGER) {
+            content.button("Открыть визуальный отладчик", Icon.zoom, () -> {
+                Core.app.openURI("http://localhost:8080/debug");
+            }).left().padTop(10).row();
+        }
+
         CheckBox debugCheckBox = new CheckBox("Показывать отладочное окно");
         debugCheckBox.setChecked(showDebug);
         debugCheckBox.changed(() -> showDebug = debugCheckBox.isChecked());
-        content.add(WebLogger.logToggle(debugCheckBox, "Show Debug Window")).left().padTop(20).row();
+        content.add(WebLogger.logToggle(debugCheckBox, "Show Debug Window")).left().padTop(10).row();
 
         Runnable fileChooserAction = () -> WebLogger.logFileChooser(file -> {
             if (file != null) {
@@ -175,7 +178,6 @@ public class ModUI {
                 int displaysX = (int) xSlider.getValue();
                 int displaysY = (int) ySlider.getValue();
                 double tolerance = toleranceSlider.getValue();
-                // Применяем твое правило: пользовательское значение минус 11
                 int maxInstructions = (int)instructionsSlider.getValue() - 11;
 
                 LogicCore logic = new LogicCore();

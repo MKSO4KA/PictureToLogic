@@ -1,6 +1,9 @@
 package com.mkso4ka.mindustry.matrixproc;
 
+import arc.graphics.Color;
 import arc.graphics.Pixmap;
+import arc.graphics.g2d.Draw;
+import arc.graphics.g2d.Fill;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -12,25 +15,27 @@ public class ImageProcessor {
     private int width;
     private int height;
 
+    public static class ProcessingSteps {
+        public final Pixmap quantizedPixmap;
+        public final Map<Integer, List<Rect>> result;
+        public ProcessingSteps(Pixmap quantized, Map<Integer, List<Rect>> result) {
+            this.quantizedPixmap = quantized;
+            this.result = result;
+        }
+    }
+
     public ImageProcessor(Pixmap pixmap) {
         this.originalPixmap = pixmap;
         this.width = pixmap.getWidth();
         this.height = pixmap.getHeight();
     }
 
-    /**
-     * Главный метод. Сначала квантует цвета, затем ищет прямоугольники.
-     * @param tolerance Допуск Delta E. 0 - без изменений, 5-15 - для артов, 20+ для фото.
-     * @return Карта с цветами и прямоугольниками.
-     */
-    public Map<Integer, List<Rect>> process(double tolerance) {
+    public ProcessingSteps process(double tolerance) {
         Pixmap processedPixmap = (tolerance > 0) ? quantize(tolerance) : originalPixmap;
-        return groupOptimal(processedPixmap);
+        Map<Integer, List<Rect>> rects = groupOptimal(processedPixmap);
+        return new ProcessingSteps(processedPixmap, rects);
     }
 
-    /**
-     * Квантует (уменьшает количество) цветов в изображении на основе допуска Delta E.
-     */
     private Pixmap quantize(double tolerance) {
         Pixmap quantizedPixmap = new Pixmap(width, height);
         List<Integer> palette = new ArrayList<>();
@@ -40,7 +45,6 @@ public class ImageProcessor {
             for (int x = 0; x < width; x++) {
                 int originalColor = originalPixmap.get(x, y);
                 
-                // Прозрачные пиксели не обрабатываем
                 if ((originalColor & 0xff) == 0) {
                     quantizedPixmap.set(x, y, originalColor);
                     continue;
@@ -72,9 +76,6 @@ public class ImageProcessor {
         return quantizedPixmap;
     }
 
-    /**
-     * Находит оптимальные прямоугольники на (уже обработанном) изображении.
-     */
     private Map<Integer, List<Rect>> groupOptimal(Pixmap pixmap) {
         this.used = new boolean[width][height];
         Map<Integer, List<Rect>> out = new HashMap<>();
@@ -88,7 +89,6 @@ public class ImageProcessor {
                 for (int x = 0; x < width; x++) {
                     if (!used[x][y]) {
                         int currentColor = pixmap.get(x, y);
-                        // Прозрачные пиксели не группируем
                         if ((currentColor & 0xff) == 0) continue;
 
                         Rect candidateRect = findLargestRectangleAt(x, y, currentColor, pixmap);
@@ -151,5 +151,23 @@ public class ImageProcessor {
                 used[rect.x + x][rect.y + y] = true;
             }
         }
+    }
+
+    public static Pixmap drawRectsOnPixmap(Pixmap source, Map<Integer, List<Rect>> rects) {
+        Pixmap copy = new Pixmap(source.getWidth(), source.getHeight());
+        copy.draw(source);
+        
+        Draw.begin(copy);
+        for (List<Rect> rectList : rects.values()) {
+            for (Rect rect : rectList) {
+                Draw.color(Color.red);
+                Fill.rect(rect.x, rect.y, rect.w, 1);
+                Fill.rect(rect.x, rect.y + rect.h - 1, rect.w, 1);
+                Fill.rect(rect.x, rect.y, 1, rect.h);
+                Fill.rect(rect.x + rect.w - 1, rect.y, 1, rect.h);
+            }
+        }
+        Draw.end();
+        return copy;
     }
 }

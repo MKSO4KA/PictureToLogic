@@ -4,7 +4,9 @@ import arc.files.Fi;
 import arc.graphics.Pixmap;
 import arc.struct.Seq;
 import arc.struct.StringMap;
-import arc.util.Log;
+import com.mkso4ka.mindustry.matrixproc.debug.DisplayData;
+import com.mkso4ka.mindustry.matrixproc.debug.ProcessorData;
+import com.mkso4ka.mindustry.matrixproc.debug.SchematicData;
 import mindustry.content.Blocks;
 import mindustry.game.Schematic;
 import mindustry.game.Schematic.Stile;
@@ -14,19 +16,19 @@ import mindustry.world.blocks.logic.LogicBlock;
 import mindustry.world.blocks.logic.LogicBlock.LogicLink;
 import mindustry.world.blocks.logic.LogicDisplay;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class LogicCore {
 
-    // УБРАНО: Константа больше не нужна, значение будет приходить из UI
-    // private static final int COMMANDS_PER_PROCESSOR = 989;
     private static final int BORDER_SIZE = 8;
 
-    // ИЗМЕНЕНО: Добавлен параметр maxInstructions
     public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, double tolerance, int maxInstructions) {
         try {
+            WebLogger.clearDebugImages();
+
             int displaySize = displayBlock.size;
             int displayPixelSize = getDisplayPixelSize(displaySize);
             int totalWidth = (displaysX * displayPixelSize) + (Math.max(0, displaysX - 1) * BORDER_SIZE * 2);
@@ -54,15 +56,22 @@ public class LogicCore {
                     Pixmap finalSlice = new Pixmap(sliceWidth, sliceHeight);
                     finalSlice.draw(scaledMasterPixmap, subX, subY, sliceWidth, sliceHeight, 0, 0, sliceWidth, sliceHeight);
                     
+                    WebLogger.logImage(String.format("slice_%d_0_raw", displayIndex), finalSlice);
+
                     ImageProcessor processor = new ImageProcessor(finalSlice);
-                    Map<Integer, List<Rect>> rects = processor.process(tolerance);
+                    ImageProcessor.ProcessingSteps steps = processor.process(tolerance);
                     
+                    WebLogger.logImage(String.format("slice_%d_1_quantized", displayIndex), steps.quantizedPixmap);
+
+                    Pixmap rectsPixmap = ImageProcessor.drawRectsOnPixmap(steps.quantizedPixmap, steps.result);
+                    WebLogger.logImage(String.format("slice_%d_2_rects", displayIndex), rectsPixmap);
+
+                    Map<Integer, List<Rect>> rects = steps.result;
                     int offsetX = (j > 0) ? BORDER_SIZE : 0;
                     int offsetY = (i > 0) ? BORDER_SIZE : 0;
                     List<String> allCommands = generateCommandList(rects, displayPixelSize, offsetX, offsetY);
                     int commandCount = allCommands.size();
-
-                    // ИЗМЕНЕНО: Используем параметр maxInstructions вместо константы
+                    
                     processorsPerDisplay[displayIndex] = (int) Math.ceil((double) commandCount / maxInstructions);
                     
                     for (int p = 0; p < processorsPerDisplay[displayIndex]; p++) {
@@ -149,7 +158,49 @@ public class LogicCore {
         
         StringMap tags = new StringMap();
         tags.put("name", "PictureToLogic-Schematic");
-        return new Schematic(tiles, tags, width, height);
+        
+        Schematic schematic = new Schematic(tiles, tags, width, height);
+
+        if (WebLogger.ENABLE_WEB_LOGGER) {
+            SchematicData data = new SchematicData();
+            data.timestamp = System.currentTimeMillis();
+            data.height = height;
+            data.width = width;
+            data.displays = new ArrayList<>();
+            data.processors = new ArrayList<>();
+
+            for (DisplayInfo display : displays) {
+                DisplayData dd = new DisplayData();
+                dd.id = display.id;
+                dd.x = display.bottomLeft.x;
+                dd.y = display.bottomLeft.y;
+                dd.size = displayBlock.size;
+                data.displays.add(dd);
+            }
+
+            for (int row = 0; row < data.height; row++) {
+                for (int col = 0; col < data.width; col++) {
+                    DisplayProcessorMatrixFinal.Cell cell = matrix[row][col];
+                    if (cell.type == 1 && cell.ownerId >= 0) {
+                        ProcessorData pd = new ProcessorData();
+                        pd.x = col;
+                        pd.y = row;
+                        pd.ownerId = cell.ownerId;
+                        
+                        String code = "";
+                        List<String> codes = codeMap.get(cell.ownerId);
+                        if (codes != null && cell.processorIndex < codes.size()) {
+                            code = codes.get(cell.processorIndex);
+                        }
+                        pd.codeBase64 = Base64.getEncoder().encodeToString(code.getBytes());
+                        data.processors.add(pd);
+                    }
+                }
+            }
+            WebLogger.logSchematicData(data);
+        }
+
+        return schematic;
     }
     
     private List<String> generateCommandList(Map<Integer, List<Rect>> rects, int displayPixelSize, int offsetX, int offsetY) {
