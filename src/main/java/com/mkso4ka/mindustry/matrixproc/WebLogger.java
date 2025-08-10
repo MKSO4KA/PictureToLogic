@@ -3,7 +3,7 @@ package com.mkso4ka.mindustry.matrixproc;
 import arc.files.Fi;
 import arc.func.Cons;
 import arc.graphics.Pixmap;
-import arc.graphics.PixmapIO; // ИСПРАВЛЕНО: Правильный импорт
+import arc.graphics.g2d.PngWriter; // ИСПРАВЛЕНО: Правильный импорт
 import arc.scene.ui.Button;
 import arc.scene.ui.CheckBox;
 import arc.scene.ui.Slider;
@@ -103,8 +103,10 @@ public class WebLogger extends NanoHTTPD {
     public static void logImage(String name, Pixmap pixmap) {
         if (!ENABLE_WEB_LOGGER || pixmap == null) return;
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-            // ИСПРАВЛЕНО: Используем PixmapIO вместо несуществующего PngWriter
-            PixmapIO.writePng(pixmap, baos);
+            // ИСПРАВЛЕНО: Используем PngWriter вместо PixmapIO для записи в поток
+            PngWriter writer = new PngWriter(baos);
+            writer.write(pixmap);
+            writer.dispose();
             debugImages.put(name, baos.toByteArray());
             info("Logged debug image: %s", name);
         } catch (IOException e) {
