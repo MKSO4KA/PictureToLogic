@@ -1,7 +1,23 @@
-name: "picture-to-logic"
+# Имя, которое видят игроки
 displayName: "Picture To Logic"
+
+# Внутреннее имя мода (без пробелов, маленькими буквами)
+name: "picture-to-logic"
+
+# Ваше имя
 author: "MKSO4KA"
-main: "com.mkso4ka.mindustry.matrixproc.PictureToLogicMod" # <--- Убедитесь, что эта строка правильная
+
+# Полный путь к главному классу
+main: "com.mkso4ka.mindustry.matrixproc.PictureToLogicMod"
+
+# Описание мода
 description: "Преобразует изображения в чертежи для логических дисплеев."
+
+# Версия мода
 version: "1.0"
-minGameVersion: "147"
+
+# Минимальная версия игры
+minGameVersion: "146" # Можно оставить 146 или обновить до ~150
+
+# САМАЯ ВАЖНАЯ СТРОКА: Указываем, что это Java-мод
+java: true
