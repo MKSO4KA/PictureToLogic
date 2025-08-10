@@ -13,12 +13,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Этот шаг правильный. JDK 17 нужен для запуска самого Gradle.
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      # ИЗМЕНЕНО: Используем специальное действие для установки Java и Android SDK
+      - name: Set up JDK and Android SDK
+        uses: Anuken/actions-android-ci@v2
         with:
-          java-version: '17'
-          distribution: 'temurin'
+            java-version: '17' # Java 17 для запуска Gradle
 
       - name: Grant execute permission to gradlew
         run: chmod +x gradlew
@@ -26,13 +25,15 @@ jobs:
       - name: Clean project
         run: ./gradlew clean
 
-      # Команда сборки остается той же. Всю магию теперь делает toolchain.
-      - name: Build with Gradle
-        run: ./gradlew jar
+      # ИЗМЕНЕНО: Вызываем задачу 'deploy' вместо 'jar'
+      - name: Build Universal Jar with Gradle
+        run: ./gradlew deploy
 
-      # Этот блок остается без изменений, как вы и просили.
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: MyJavaMod
           path: build/libs/*.jar
+          # Исключаем временные файлы, чтобы остался только один, финальный .jar
+          if-no-files-found: error
+          retention-days: 7

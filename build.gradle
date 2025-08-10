@@ -9,12 +9,14 @@ java {
 }
 
 ext {
-    mindustryVersion = "v147" 
+    mindustryVersion = "v147"
+    // Переменная для определения, запущена ли сборка на Windows
+    isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
 }
 
 group = 'com.mkso4ka.mindustry.matrixproc'
 version = '1.0-SNAPSHOT'
-sourceCompatibility = 1.8 
+sourceCompatibility = 1.8
 
 repositories {
     mavenCentral()
@@ -24,20 +26,39 @@ repositories {
 }
 
 dependencies {
-    testImplementation platform('org.junit:junit-bom:5.10.0')
-    testImplementation 'org.junit.jupiter:junit-jupiter'
-
     compileOnly "com.github.Anuken.Mindustry:core:${mindustryVersion}"
     compileOnly "com.github.Anuken.Arc:arc-core:${mindustryVersion}"
 }
 
-// ИЗМЕНЕНО: Убираем лишнюю инструкцию 'from'
+// Эта задача теперь собирает JAR только для ПК
 jar {
-    // Оставляем только настройку имени файла.
-    // Gradle сам добавит ресурсы из src/main/resources.
-    archiveBaseName = 'PictureToLogic'
+    archiveBaseName = "${project.name}-Desktop"
 }
 
-test {
-    useJUnitPlatform()
+// Новая задача, которая конвертирует ПК-версию в Android-версию
+task jarAndroid (type: Jar, dependsOn: jar){
+    archiveBaseName = "${project.name}-Android"
+    from(zipTree(jar.archiveFile))
+    // Используем инструмент d8 из Android SDK для конвертации
+    doLast{
+        def d8 = new File(System.getenv("ANDROID_HOME"), "build-tools/${findLatestBuildTools()}/d8" + (isWindows ? ".bat" : ""))
+        exec{
+            commandLine d8, "--release", "--output", archiveFile.get().asFile, jar.archiveFile.get().asFile
+        }
+    }
+}
+
+// Финальная задача, которая собирает универсальный JAR
+task deploy(type: Jar, dependsOn: jarAndroid) {
+    archiveBaseName = project.name
+    from(zipTree(jar.archiveFile), zipTree(jarAndroid.archiveFile))
+}
+
+// Вспомогательная функция для поиска последней версии build-tools
+String findLatestBuildTools(){
+    def buildTools = new File(System.getenv("ANDROID_HOME"), "build-tools")
+    if(!buildTools.exists()) return ""
+    return buildTools.listFiles().sort{ a, b ->
+        b.name.replace("-preview", ".0").compareTo(a.name.replace("-preview", ".0"))
+    }[0].name
 }
