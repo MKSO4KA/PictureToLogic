@@ -19,8 +19,8 @@ public class ModUI {
     private static LogicDisplay selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay;
     private static boolean showDebug = true;
 
-    private static Slider xSlider, ySlider, instructionsSlider;
-    private static Label xLabel, yLabel, instructionsLabel;
+    private static Slider xSlider, ySlider, toleranceSlider;
+    private static Label xLabel, yLabel, toleranceLabel;
     private static Table previewTable;
 
     public static void build() {
@@ -41,46 +41,39 @@ public class ModUI {
         Table content = dialog.cont;
         content.defaults().pad(8);
 
-        // --- Верхняя панель: Слайдеры и предпросмотр ---
         Table topPanel = new Table();
         Table sliders = new Table();
-        sliders.defaults().pad(2);
+        sliders.defaults().pad(2).left();
 
-        // Слайдер для X
         xSlider = WebLogger.logChange(new Slider(1, 10, 1, false), "Displays X");
-        xLabel = new Label("1");
-        sliders.add("Дисплеев по X:").left();
-        sliders.add(xSlider).width(200f).padLeft(10).padRight(10);
-        sliders.add(xLabel).left().minWidth(25);
-        sliders.row();
-
-        // Слайдер для Y
         ySlider = WebLogger.logChange(new Slider(1, 10, 1, false), "Displays Y");
+        xLabel = new Label("1");
         yLabel = new Label("1");
-        sliders.add("Дисплеев по Y:").left();
+
+        sliders.add("Дисплеев по X:");
+        sliders.add(xSlider).width(200f).padLeft(10).padRight(10);
+        sliders.add(xLabel);
+        sliders.row();
+
+        sliders.add("Дисплеев по Y:");
         sliders.add(ySlider).width(200f).padLeft(10).padRight(10);
-        sliders.add(yLabel).left().minWidth(25);
+        sliders.add(yLabel);
         sliders.row();
 
-        // --- НОВЫЙ СЛАЙДЕР: Инструкций на процессор ---
-        instructionsSlider = WebLogger.logChange(new Slider(1, 10, 1, false), "Instructions per Processor");
-        instructionsSlider.setValue(10); // По умолчанию 10 * 100 = 1000
-        instructionsLabel = new Label("1000");
-        sliders.add("Инструкций/проц:").left();
-        sliders.add(instructionsSlider).width(200f).padLeft(10).padRight(10);
-        sliders.add(instructionsLabel).left().minWidth(40); // Больше места для четырехзначного числа
-        sliders.row();
+        toleranceSlider = WebLogger.logChange(new Slider(0, 50, 1, false), "Color Tolerance");
+        toleranceSlider.setValue(10);
+        toleranceLabel = new Label("10.0");
+        sliders.add("Допуск цвета:").padTop(10);
+        sliders.add(toleranceSlider).width(200f).padLeft(10).padRight(10).padTop(10);
+        sliders.add(toleranceLabel).padTop(10);
 
-        // Панель предпросмотра
         previewTable = new Table();
         previewTable.setBackground(Tex.buttonDown);
 
-        // ИСПРАВЛЕНО: Добавляем sliders в отдельную ячейку, чтобы предпросмотр не влиял на них
         topPanel.add(sliders);
-        topPanel.add(previewTable).padLeft(20).top(); // .top() чтобы выровнять по верху
+        topPanel.add(previewTable).padLeft(20);
         content.add(topPanel).row();
 
-        // --- Средняя панель: Выбор типа дисплея ---
         content.add("Тип дисплея:").left().padTop(20).row();
         Table displaySelector = new Table();
         ButtonGroup<TextButton> group = new ButtonGroup<>();
@@ -110,7 +103,6 @@ public class ModUI {
         displaySelector.add(largeLogicDisplayButton).size(240, 60).padLeft(10);
         content.add(displaySelector).row();
 
-        // --- Нижняя панель: Опции и действия ---
         CheckBox debugCheckBox = new CheckBox("Показывать отладочное окно");
         debugCheckBox.setChecked(showDebug);
         debugCheckBox.changed(() -> showDebug = debugCheckBox.isChecked());
@@ -126,7 +118,6 @@ public class ModUI {
         WebLogger.logClick(selectFileCell.get(), "Select Image and Create");
         selectFileCell.padTop(20).growX().height(60);
 
-        // --- Инициализация и слушатели ---
         xSlider.changed(() -> {
             xLabel.setText(String.valueOf((int)xSlider.getValue()));
             updatePreview();
@@ -135,9 +126,8 @@ public class ModUI {
             yLabel.setText(String.valueOf((int)ySlider.getValue()));
             updatePreview();
         });
-        // Слушатель для нового слайдера
-        instructionsSlider.changed(() -> {
-            instructionsLabel.setText(String.valueOf((int)instructionsSlider.getValue() * 100));
+        toleranceSlider.changed(() -> {
+            toleranceLabel.setText(String.format("%.1f", toleranceSlider.getValue()));
         });
         updatePreview();
 
@@ -159,24 +149,21 @@ public class ModUI {
 
     private static void generateAndShowSchematic(Fi imageFile) {
         Vars.ui.loadfrag.show("Обработка изображения...");
-        
-        // Получаем значения из UI
-        int displaysX = (int) xSlider.getValue();
-        int displaysY = (int) ySlider.getValue();
-        int instructionsPerProc = (int) instructionsSlider.getValue() * 100;
-
         WebLogger.info("--- Starting Image Processing ---");
         WebLogger.info("File: %s", imageFile.name());
-        WebLogger.info("Grid: %dx%d", displaysX, displaysY);
+        WebLogger.info("Grid: %dx%d", (int)xSlider.getValue(), (int)ySlider.getValue());
         WebLogger.info("Display Type: %s", selectedDisplay.name);
-        WebLogger.info("Instructions per Processor: %d", instructionsPerProc);
+        WebLogger.info("Color Tolerance (Delta E): %.1f", toleranceSlider.getValue());
 
         new Thread(() -> {
             ProcessingResult result = null;
             try {
+                int displaysX = (int) xSlider.getValue();
+                int displaysY = (int) ySlider.getValue();
+                double tolerance = toleranceSlider.getValue();
+
                 LogicCore logic = new LogicCore();
-                // Передаем новое значение в ядро логики
-                result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay, instructionsPerProc);
+                result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay, tolerance);
             } catch (Exception e) {
                 WebLogger.err("Критическая ошибка при создании чертежа!", e);
             } finally {
