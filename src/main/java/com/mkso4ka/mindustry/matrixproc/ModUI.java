@@ -90,7 +90,6 @@ public class ModUI {
                 ProcessingResult finalResult = result;
                 Core.app.post(() -> {
                     if (finalResult != null && finalResult.schematic != null) {
-                        // Вместо немедленного использования схемы, показываем отладочный диалог
                         showDebugDialog(finalResult);
                     } else {
                         Vars.ui.showInfo("[scarlet]Не удалось создать чертеж. Проверьте логи.[]");
@@ -100,11 +99,9 @@ public class ModUI {
         }).start();
     }
 
-    // НОВЫЙ МЕТОД: Показывает отладочный диалог
     private static void showDebugDialog(ProcessingResult result) {
         BaseDialog dialog = new BaseDialog("Отладка размещения");
         
-        // --- 1. Генерация отладочного текста ---
         StringBuilder sb = new StringBuilder();
         sb.append("[lightgray]Матрица: ").append(result.matrixWidth).append("x").append(result.matrixHeight).append("\n");
         sb.append("Размер дисплея: ").append(result.displaySize).append("x").append(result.displaySize).append("\n\n");
@@ -122,18 +119,17 @@ public class ModUI {
         }
         sb.append("\n[accent]Визуализация матрицы (P-процессор, D-дисплей):[]\n");
 
-        // Рисуем матрицу (0,0 в левом нижнем углу)
         for (int y = result.matrixHeight - 1; y >= 0; y--) {
             for (int x = 0; x < result.matrixWidth; x++) {
                 DisplayProcessorMatrixFinal.Cell cell = result.matrix[y][x];
                 switch(cell.type) {
-                    case 1: // Процессор
+                    case 1:
                         sb.append("[#").append(mindustry.graphics.Pal.accent.toString()).append("]P[]");
                         break;
-                    case 2: // Дисплей
+                    case 2:
                         sb.append("[#").append(mindustry.graphics.Pal.items.toString()).append("]D[]");
                         break;
-                    default: // Пусто
+                    default:
                         sb.append("[lightgray].[]");
                         break;
                 }
@@ -143,10 +139,10 @@ public class ModUI {
         
         final String debugText = sb.toString();
 
-        // --- 2. Создание UI диалога ---
         Table content = dialog.cont;
         Label label = new Label(debugText);
-        label.setStyle(Styles.monoLabel); // Моноширинный шрифт для выравнивания
+        // ИСПРАВЛЕНО: Удалена строка, вызывавшая ошибку компиляции.
+        // label.setStyle(Styles.monoLabel); // <-- ОШИБОЧНАЯ СТРОКА
         ScrollPane scroll = new ScrollPane(label, Styles.defaultPane);
         content.add(scroll).grow().width(Core.graphics.getWidth() * 0.8f).height(Core.graphics.getHeight() * 0.7f);
 
