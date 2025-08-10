@@ -23,7 +23,8 @@ public class LogicCore {
     private static final int COMMANDS_PER_PROCESSOR = 989;
     private static final int BORDER_SIZE = 8;
 
-    public Schematic processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock) {
+    // ИЗМЕНЕНО: Метод теперь возвращает ProcessingResult
+    public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock) {
         try {
             int displaySize = displayBlock.size;
             int displayPixelSize = getDisplayPixelSize(displaySize);
@@ -79,7 +80,10 @@ public class LogicCore {
             DisplayProcessorMatrixFinal.Cell[][] finalMatrix = matrixFinal.getMatrix();
             DisplayInfo[] finalDisplays = matrixFinal.getDisplays();
 
-            return buildSchematic(finalMatrix, finalDisplays, codeMap, displayBlock);
+            Schematic schematic = buildSchematic(finalMatrix, finalDisplays, codeMap, displayBlock);
+
+            // Возвращаем контейнер с результатом и данными для отладки
+            return new ProcessingResult(schematic, finalMatrix, finalDisplays, displaySize);
 
         } catch (Exception e) {
             Log.err("Критическая ошибка в LogicCore!", e);
@@ -110,7 +114,6 @@ public class LogicCore {
                     LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
                     build.tile = new Tile(schemX, schemY);
                     
-                    // Вычисляем координаты одной из центральных клеток для надежной связи
                     int linkToX = ownerDisplay.bottomLeft.x + displayBlock.size / 2;
                     int linkToY = ownerDisplay.bottomLeft.y + displayBlock.size / 2;
                     
@@ -122,7 +125,6 @@ public class LogicCore {
             }
         }
 
-        // Размещаем дисплеи по их нижним левым углам
         for (DisplayInfo display : displays) {
             tiles.add(new Stile(displayBlock, (short)display.bottomLeft.x, (short)display.bottomLeft.y, null, (byte) 0));
         }

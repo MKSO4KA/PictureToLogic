@@ -15,13 +15,12 @@ import mindustry.ui.Styles;
 import mindustry.ui.dialogs.BaseDialog;
 import mindustry.world.blocks.ItemSelection;
 import mindustry.world.blocks.logic.LogicDisplay;
-import mindustry.content.Blocks; // Импортируем для дисплея по умолчанию
+import mindustry.content.Blocks;
 
 public class ModUI {
 
     private static TextField displaysXField;
     private static TextField displaysYField;
-    // НОВАЯ ПЕРЕМЕННАЯ: Хранит выбранный пользователем дисплей
     private static LogicDisplay selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay;
 
     public static void build() {
@@ -36,12 +35,9 @@ public class ModUI {
     private static void showSettingsDialog() {
         BaseDialog dialog = new BaseDialog("Настройки PictureToLogic");
 
-        // --- НАЧАЛО ИЗМЕНЕНИЙ ---
-
         Table content = dialog.cont;
         content.defaults().pad(4);
 
-        // Поля для ввода размеров сетки
         content.add("Дисплеев по X:").padRight(10);
         displaysXField = new TextField("1");
         displaysXField.setValidator(text -> text.matches("[0-9]+") && Integer.parseInt(text) > 0);
@@ -52,18 +48,13 @@ public class ModUI {
         displaysYField.setValidator(text -> text.matches("[0-9]+") && Integer.parseInt(text) > 0);
         content.add(displaysYField).width(100f).row();
 
-        // НОВЫЙ ЭЛЕМЕНТ: Выбор типа дисплея
         content.add("Тип дисплея:").colspan(2).left().row();
         Table displaySelector = new Table();
-        // Получаем все доступные в игре логические дисплеи
         Seq<LogicDisplay> displays = Vars.content.blocks().select(b -> b instanceof LogicDisplay).as();
-        // Создаем стандартный для Mindustry селектор блоков
         ItemSelection.buildTable(displaySelector, displays, () -> selectedDisplay, d -> {
-            selectedDisplay = d; // Обновляем выбранный дисплей
+            selectedDisplay = d;
         });
         content.add(displaySelector).colspan(2).left().row();
-
-        // --- КОНЕЦ ИЗМЕНЕНИЙ ---
 
         content.button("Выбрать и создать чертеж", Icon.file, () -> {
             Vars.platform.showFileChooser(true, "Выбор изображения", "png", file -> {
@@ -84,29 +75,94 @@ public class ModUI {
         Vars.ui.loadfrag.show("Обработка изображения...");
 
         new Thread(() -> {
-            Schematic schematic = null;
+            ProcessingResult result = null;
             try {
                 int displaysX = Integer.parseInt(displaysXField.getText());
                 int displaysY = Integer.parseInt(displaysYField.getText());
 
                 LogicCore logic = new LogicCore();
-                // ОБНОВЛЕНО: Передаем выбранный дисплей в ядро логики
-                schematic = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay);
+                result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay);
             } catch (Exception e) {
                 Log.err("Критическая ошибка при создании чертежа!", e);
             } finally {
                 Vars.ui.loadfrag.hide();
                 
-                Schematic finalSchematic = schematic;
+                ProcessingResult finalResult = result;
                 Core.app.post(() -> {
-                    if (finalSchematic != null) {
-                        Vars.ui.schematics.hide();
-                        Vars.control.input.useSchematic(finalSchematic);
+                    if (finalResult != null && finalResult.schematic != null) {
+                        // Вместо немедленного использования схемы, показываем отладочный диалог
+                        showDebugDialog(finalResult);
                     } else {
                         Vars.ui.showInfo("[scarlet]Не удалось создать чертеж. Проверьте логи.[]");
                     }
                 });
             }
         }).start();
+    }
+
+    // НОВЫЙ МЕТОД: Показывает отладочный диалог
+    private static void showDebugDialog(ProcessingResult result) {
+        BaseDialog dialog = new BaseDialog("Отладка размещения");
+        
+        // --- 1. Генерация отладочного текста ---
+        StringBuilder sb = new StringBuilder();
+        sb.append("[lightgray]Матрица: ").append(result.matrixWidth).append("x").append(result.matrixHeight).append("\n");
+        sb.append("Размер дисплея: ").append(result.displaySize).append("x").append(result.displaySize).append("\n\n");
+        
+        sb.append("[accent]Информация по дисплеям:[]\n");
+        for (DisplayInfo display : result.displays) {
+            sb.append("  ID: ").append(display.id);
+            sb.append(" | BL: (").append(display.bottomLeft.x).append(",").append(display.bottomLeft.y).append(")");
+            sb.append(" | Требуется: ").append(display.totalProcessorsRequired);
+            sb.append(" | Размещено: ").append(display.processorsPlaced);
+            if (display.getProcessorsNeeded() > 0) {
+                sb.append(" [scarlet](НЕХВАТКА)[]");
+            }
+            sb.append("\n");
+        }
+        sb.append("\n[accent]Визуализация матрицы (P-процессор, D-дисплей):[]\n");
+
+        // Рисуем матрицу (0,0 в левом нижнем углу)
+        for (int y = result.matrixHeight - 1; y >= 0; y--) {
+            for (int x = 0; x < result.matrixWidth; x++) {
+                DisplayProcessorMatrixFinal.Cell cell = result.matrix[y][x];
+                switch(cell.type) {
+                    case 1: // Процессор
+                        sb.append("[#").append(mindustry.graphics.Pal.accent.toString()).append("]P[]");
+                        break;
+                    case 2: // Дисплей
+                        sb.append("[#").append(mindustry.graphics.Pal.items.toString()).append("]D[]");
+                        break;
+                    default: // Пусто
+                        sb.append("[lightgray].[]");
+                        break;
+                }
+            }
+            sb.append("\n");
+        }
+        
+        final String debugText = sb.toString();
+
+        // --- 2. Создание UI диалога ---
+        Table content = dialog.cont;
+        Label label = new Label(debugText);
+        label.setStyle(Styles.monoLabel); // Моноширинный шрифт для выравнивания
+        ScrollPane scroll = new ScrollPane(label, Styles.defaultPane);
+        content.add(scroll).grow().width(Core.graphics.getWidth() * 0.8f).height(Core.graphics.getHeight() * 0.7f);
+
+        dialog.buttons.button("Копировать", Icon.copy, () -> {
+            Core.app.setClipboardText(label.getText().toString());
+            Vars.ui.showInfo("Отладочная информация скопирована.");
+        }).size(200, 54);
+
+        dialog.buttons.button("Построить схему", Icon.ok, () -> {
+            dialog.hide();
+            Vars.ui.schematics.hide();
+            Vars.control.input.useSchematic(result.schematic);
+        }).size(220, 54);
+        
+        dialog.buttons.button("Отмена", Icon.cancel, dialog::hide).size(150, 54);
+
+        dialog.show();
     }
 }
