@@ -1,15 +1,15 @@
 package com.mkso4ka.mindustry.matrixproc;
 
-import arc.Core;
-import arc.files.Fi; // Универсальный объект файла
+import arc.Core; // ИСПОЛЬЗУЕМ ЭТОТ КЛАСС
+import arc.files.Fi;
 import arc.util.Log;
 import mindustry.Vars;
 import mindustry.gen.Icon;
-import mindustry.io.Platform; // Ключевой класс для доступа к системным функциям
+// SchematicDialog не нужен, так как мы обращаемся к UI напрямую
 import mindustry.ui.dialogs.BaseDialog;
-import mindustry.ui.dialogs.SchematicDialog;
 import mindustry.ui.Styles;
 import arc.scene.ui.TextField;
+import arc.scene.ui.layout.Table; // Импортируем Table для работы с UI
 
 public class ModUI {
 
@@ -18,9 +18,11 @@ public class ModUI {
 
     public static void build() {
         try {
-            SchematicDialog schematicsDialog = Vars.ui.schematics;
+            // В v147 мы обращаемся к UI немного иначе.
+            // Vars.ui.schematics - это уже готовый объект, нам не нужно объявлять его тип.
+            Table schematicsButtons = Vars.ui.schematics.buttons;
 
-            schematicsDialog.buttons.button("PictureToLogic", Icon.image, () -> {
+            schematicsButtons.button("PictureToLogic", Icon.image, () -> {
                 showSettingsDialog();
             }).size(180, 64).padLeft(6);
 
@@ -44,31 +46,20 @@ public class ModUI {
         displaysYField.setValidator(text -> text.matches("[0-9]+") && Integer.parseInt(text) > 0);
         dialog.cont.add(displaysYField).width(100f).row();
 
-        // --- НАЧАЛО ИЗМЕНЕНИЙ ---
-
         dialog.cont.button("Выбрать изображение...", Icon.file, () -> {
-            // Вот она, магия!
-            // Мы просим платформу показать диалог выбора файла.
-            // true - для открытия файла
-            // "Выбор изображения" - заголовок окна
-            // "png" - фильтр по расширению (можно добавить еще, например "jpg")
-            // file -> { ... } - это функция, которая будет вызвана после выбора файла
-            Platform.instance.showFileChooser(true, "Выбор изображения", "png", file -> {
-                // Проверяем, что файл действительно был выбран и существует
+            // ИЗМЕНЕНО: Вызываем файловый диалог через Core.platform
+            Core.platform.showFileChooser(true, "Выбор изображения", "png", file -> {
                 if (file != null && file.exists()) {
                     Log.info("Выбран файл: " + file.path());
                     Vars.ui.showInfo("Выбран файл: " + file.name());
 
-                    // Теперь можно запустить генерацию
                     generateSchematic(file);
-                    dialog.hide(); // Закрываем диалог настроек после выбора
+                    dialog.hide();
                 } else {
                     Vars.ui.showInfo("Файл не выбран.");
                 }
             });
         }).padTop(20).colspan(2).growX();
-
-        // --- КОНЕЦ ИЗМЕНЕНИЙ ---
 
         dialog.buttons.defaults().size(150, 54);
         dialog.buttons.button("Закрыть", Icon.cancel, dialog::hide);
@@ -76,10 +67,6 @@ public class ModUI {
         dialog.show();
     }
 
-    /**
-     * Эта функция будет принимать выбранный файл и запускать вашу логику.
-     * @param imageFile Выбранный пользователем файл изображения.
-     */
     private static void generateSchematic(Fi imageFile) {
         try {
             int displaysX = Integer.parseInt(displaysXField.getText());
@@ -88,20 +75,9 @@ public class ModUI {
             Log.info("Начинаем генерацию для файла " + imageFile.name());
             Log.info("Размер сетки дисплеев: " + displaysX + "x" + displaysY);
 
-            // 1. Прочитать байты из файла
             byte[] imageBytes = imageFile.readBytes();
 
-            // 2. Здесь вы будете вызывать ваш класс ImageProcessor
-            //    (или как вы его назвали), который принимает байты и настройки.
-            //
-            //    Пример:
-            //    ImageProcessor processor = new ImageProcessor(imageBytes, displaysX, displaysY);
-            //    String logicCode = processor.generate();
-            //
-            //    Schematic schematic = Schematics.read(logicCode);
-            //    Vars.ui.schematics.show(schematic); // Показываем чертеж игроку
-
-            // Пока у нас нет процессора, просто покажем уведомление
+            // Здесь будет ваш код
             Vars.ui.showInfo("Генерация будет добавлена позже!");
 
         } catch (Exception e) {
