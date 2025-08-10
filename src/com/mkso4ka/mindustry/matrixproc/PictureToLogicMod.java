@@ -1,17 +1,15 @@
-// src/main/java/com/mkso4ka/mindustry/matrixproc/PictureToLogicMod.java
-
 package com.mkso4ka.mindustry.matrixproc;
 
 import mindustry.mod.*;
 import mindustry.game.EventType.*;
 import arc.util.Log;
+import arc.Events; // <-- ИСПРАВЛЕНИЕ 3: Добавлен этот импорт
 
 public class PictureToLogicMod extends Mod {
 
     public PictureToLogicMod(){
-        // Мы будем слушать событие загрузки клиента
+        // Теперь компилятор знает, что такое "Events"
         Events.on(ClientLoadEvent.class, e -> {
-            // Когда игра загрузится, вызываем наш метод для построения UI
             ModUI.build();
             Log.info("PictureToLogic UI Initialized.");
         });
