@@ -53,10 +53,8 @@ public class ModUI {
     }
 
     private static void generateAndShowSchematic(Fi imageFile) {
-        // Показываем индикатор загрузки
         Vars.ui.loadfrag.show("Обработка изображения...");
 
-        // Запускаем обработку в отдельном потоке, чтобы не "морозить" игру
         new Thread(() -> {
             try {
                 int displaysX = Integer.parseInt(displaysXField.getText());
@@ -65,12 +63,12 @@ public class ModUI {
                 LogicCore logic = new LogicCore();
                 Schematic schematic = logic.processImage(imageFile, displaysX, displaysY);
                 
-                // Прячем индикатор загрузки
                 Vars.ui.loadfrag.hide();
 
-                // Если все прошло успешно, показываем чертеж
                 if (schematic != null) {
-                    Vars.ui.schematics.show(schematic);
+                    // ИЗМЕНЕН СПОСОБ ПОКАЗА ЧЕРТЕЖА
+                    Vars.ui.schematics.hide(); // Сначала прячем диалог со списком
+                    Vars.control.input.useSchematic(schematic); // Затем сразу активируем чертеж
                 } else {
                     Vars.ui.showInfo("[scarlet]Не удалось создать чертеж. Проверьте логи.[]");
                 }
