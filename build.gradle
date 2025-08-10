@@ -27,6 +27,10 @@ repositories {
 dependencies {
     compileOnly "com.github.Anuken.Mindustry:core:${mindustryVersion}"
     compileOnly "com.github.Anuken.Arc:arc-core:${mindustryVersion}"
+
+    // --- ДОБАВЬ ЭТУ СТРОКУ ---
+    // Библиотека для встроенного веб-сервера, работает на ПК и Android
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
 }
 
 jar {
