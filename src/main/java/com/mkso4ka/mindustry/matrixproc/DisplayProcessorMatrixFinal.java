@@ -19,8 +19,8 @@ class DisplayProcessorMatrixFinal {
     public static final double PROCESSOR_REACH = 10.2;
     private static final double PROCESSOR_REACH_SQ = PROCESSOR_REACH * PROCESSOR_REACH;
 
-    private final int n;
-    private final int m;
+    private final int n; // высота (y)
+    private final int m; // ширина (x)
     private final Cell[][] matrix;
     private final DisplayInfo[] displays;
     private final int displaySize;
@@ -57,23 +57,24 @@ class DisplayProcessorMatrixFinal {
         int end = (displaySize % 2 == 0) ? offset - 1 : offset;
         for (int i = start; i <= end; i++) {
             for (int j = start; j <= end; j++) {
-                int currentX = display.center.x + i;
-                int currentY = display.center.y + j;
-                if (currentX >= 0 && currentX < m && currentY >= 0 && currentY < n) { // ИСПРАВЛЕНО: Проверка границ m и n
-                    matrix[currentY][currentX].type = 2; // ИСПРАВЛЕНО: matrix[y][x]
+                int currentX = display.center.x + j; // X - это j
+                int currentY = display.center.y + i; // Y - это i
+                if (currentX >= 0 && currentX < m && currentY >= 0 && currentY < n) {
+                    matrix[currentY][currentX].type = 2;
                     matrix[currentY][currentX].ownerId = display.id;
                 }
             }
         }
     }
 
+    // --- ПОЛНОСТЬЮ ПЕРЕПИСАННЫЙ АЛГОРИТМ РАЗМЕЩЕНИЯ ---
     public void placeProcessors() {
-        Log.info("Этап 1: Максимальное заполнение (с радиусом процессора " + PROCESSOR_REACH + ")");
+        // --- ЭТАП 1: Поиск всех возможных мест для процессоров (остается без изменений) ---
+        Log.info("Этап 1: Поиск всех возможных мест для процессоров...");
         Queue<Point2> queue = new LinkedList<>();
         Set<Point2> visited = new HashSet<>();
         List<Point2> genericProcessors = new ArrayList<>();
         
-        // ИСПРАВЛЕНО: Правильный обход n (высота, y) и m (ширина, x)
         for (int y = 0; y < n; y++) {
             for (int x = 0; x < m; x++) {
                 if (matrix[y][x].type == 2) {
@@ -96,7 +97,7 @@ class DisplayProcessorMatrixFinal {
         while (!queue.isEmpty()) {
             Point2 current = queue.poll();
             matrix[current.y][current.x].type = 1;
-            matrix[current.y][current.x].ownerId = -2;
+            matrix[current.y][current.x].ownerId = -2; // Временно помечаем как "общий"
             genericProcessors.add(current);
             for (int dy = -1; dy <= 1; dy++) {
                 for (int dx = -1; dx <= 1; dx++) {
@@ -111,31 +112,47 @@ class DisplayProcessorMatrixFinal {
                 }
             }
         }
-        Log.info("Заполнение завершено. Найдено " + genericProcessors.size() + " возможных мест для процессоров.");
-        Log.info("Этап 2: Оптимальное распределение процессоров...");
-        for (Point2 procPoint : genericProcessors) {
-            DisplayInfo bestOwner = null;
-            double minDistanceSq = Double.MAX_VALUE;
-            for (DisplayInfo display : displays) {
-                if (display.getProcessorsNeeded() > 0) {
-                    // --- ГЛАВНОЕ ИСПРАВЛЕНИЕ БАГА ---
-                    // Вместо display.distanceSq(procPoint) используем правильный метод,
-                    // который считает расстояние до КРАЯ прямоугольника.
-                    double distSq = distanceSqFromPointToRectangle(procPoint, display);
-                    
+        Log.info("Завершено. Найдено " + genericProcessors.size() + " возможных мест.");
+
+        // --- ЭТАП 2: Дисплей-центричное распределение для удовлетворения потребностей ---
+        Log.info("Этап 2: Приоритетное распределение требуемых процессоров...");
+        List<Point2> availableProcLocations = new ArrayList<>(genericProcessors);
+
+        for (DisplayInfo display : displays) {
+            while (display.getProcessorsNeeded() > 0) {
+                Point2 bestSpot = null;
+                double minDistanceSq = Double.MAX_VALUE;
+
+                // Для текущего дисплея ищем лучший из ВСЕХ ЕЩЕ ДОСТУПНЫХ процессоров
+                for (Point2 spot : availableProcLocations) {
+                    double distSq = distanceSqFromPointToRectangle(spot, display);
                     if (distSq <= PROCESSOR_REACH_SQ && distSq < minDistanceSq) {
                         minDistanceSq = distSq;
-                        bestOwner = display;
+                        bestSpot = spot;
                     }
                 }
+
+                if (bestSpot != null) {
+                    // Мы нашли лучший спот для этого дисплея. Забираем его.
+                    matrix[bestSpot.y][bestSpot.x].ownerId = display.id;
+                    display.processorsPlaced++;
+                    // Удаляем его из списка доступных, чтобы другие не могли его забрать
+                    availableProcLocations.remove(bestSpot);
+                } else {
+                    // Если для дисплея не нашлось ни одного доступного места,
+                    // прекращаем попытки для него.
+                    Log.warn("Для дисплея " + display.id + " не найдено доступных мест в радиусе досягаемости.");
+                    break; 
+                }
             }
-            if (bestOwner != null) {
-                matrix[procPoint.y][procPoint.x].ownerId = bestOwner.id;
-                bestOwner.processorsPlaced++;
-            } else {
-                matrix[procPoint.y][procPoint.x].type = 0;
-                matrix[procPoint.y][procPoint.x].ownerId = -1;
-            }
+        }
+
+        // --- ЭТАП 3: Очистка неиспользованных процессоров ---
+        Log.info("Этап 3: Очистка нераспределенных процессоров...");
+        for (Point2 unusedSpot : availableProcLocations) {
+            // Если процессор остался в списке, значит, он не понадобился ни одному дисплею.
+            matrix[unusedSpot.y][unusedSpot.x].type = 0;
+            matrix[unusedSpot.y][unusedSpot.x].ownerId = -1;
         }
     }
 
