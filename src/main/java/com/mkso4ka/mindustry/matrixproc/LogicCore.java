@@ -136,6 +136,11 @@ public class LogicCore {
                 finalX += 2;
                 finalY += 2;
             }
+            else if (displayBlock.size == 3)
+            {
+                finalX += 1;
+                finalY += 1;
+            }
             // ---------------------------------------------------------
 
             tiles.add(new Stile(displayBlock, finalX, finalY, null, (byte) 0));
