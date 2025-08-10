@@ -2,14 +2,24 @@ plugins {
     id 'java'
 }
 
-// Переменная для версии игры, чтобы легко ее менять
+// ВАЖНО: Добавляем этот блок для настройки Toolchain
+java {
+    // Эта настройка говорит Gradle: "Для компиляции кода этого проекта
+    // найди и используй компилятор от Java 8".
+    // Это гарантирует 100% совместимость с Mindustry.
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(8)
+    }
+}
+
 ext {
     mindustryVersion = "v150" // Используйте актуальную версию Mindustry
 }
 
 group = 'com.mkso4ka.mindustry.matrixproc'
 version = '1.0-SNAPSHOT'
-sourceCompatibility = 1.8 // Mindustry использует Java 8
+// Эта строка теперь является дополнением к toolchain. Оставляем ее.
+sourceCompatibility = 1.8 
 
 repositories {
     mavenCentral()
@@ -26,15 +36,14 @@ dependencies {
 
     // !!! КЛЮЧЕВАЯ ЗАВИСИМОСТЬ !!!
     // Мы подключаем ядро Mindustry.
-    // 'compileOnly' означает, что эти классы нужны только для компиляции,
-    // так как в самой игре они уже будут предоставлены.
     compileOnly "com.github.Anuken.Mindustry:core:${mindustryVersion}"
     compileOnly "com.github.Anuken.Arc:arc-core:${mindustryVersion}"
 }
 
 // Конфигурация задачи сборки JAR-файла
 jar {
-    // Указываем имя итогового файла
+    // Имя файла, которое вы просили не менять в другом месте, здесь не указывается.
+    // Оно берется из archiveBaseName. Давайте зададим его здесь явно.
     archiveBaseName = 'PictureToLogic'
 
     // Включаем все файлы из папки 'resources' (включая mod.hjson)

@@ -13,6 +13,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Этот шаг правильный. JDK 17 нужен для запуска самого Gradle.
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -22,15 +23,14 @@ jobs:
       - name: Grant execute permission to gradlew
         run: chmod +x gradlew
 
-      # --- НОВЫЙ ШАГ, КОТОРЫЙ НУЖНО ДОБАВИТЬ ---
-      # Он выполнит очистку перед сборкой
       - name: Clean project
         run: ./gradlew clean
 
-      # --- ЭТОТ ШАГ УЖЕ БЫЛ, ОСТАВЛЯЕМ ЕГО ---
+      # Команда сборки остается той же. Всю магию теперь делает toolchain.
       - name: Build with Gradle
         run: ./gradlew jar
 
+      # Этот блок остается без изменений, как вы и просили.
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
