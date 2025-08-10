@@ -1,15 +1,14 @@
 package com.mkso4ka.mindustry.matrixproc;
 
-import arc.Core; // ИСПОЛЬЗУЕМ ЭТОТ КЛАСС
+// import arc.Core; // Core больше не нужен для этой цели, можно убрать
 import arc.files.Fi;
 import arc.util.Log;
-import mindustry.Vars;
+import mindustry.Vars; // НАШ ГЛАВНЫЙ ИНСТРУМЕНТ
 import mindustry.gen.Icon;
-// SchematicDialog не нужен, так как мы обращаемся к UI напрямую
 import mindustry.ui.dialogs.BaseDialog;
 import mindustry.ui.Styles;
 import arc.scene.ui.TextField;
-import arc.scene.ui.layout.Table; // Импортируем Table для работы с UI
+import arc.scene.ui.layout.Table;
 
 public class ModUI {
 
@@ -18,8 +17,6 @@ public class ModUI {
 
     public static void build() {
         try {
-            // В v147 мы обращаемся к UI немного иначе.
-            // Vars.ui.schematics - это уже готовый объект, нам не нужно объявлять его тип.
             Table schematicsButtons = Vars.ui.schematics.buttons;
 
             schematicsButtons.button("PictureToLogic", Icon.image, () -> {
@@ -47,8 +44,8 @@ public class ModUI {
         dialog.cont.add(displaysYField).width(100f).row();
 
         dialog.cont.button("Выбрать изображение...", Icon.file, () -> {
-            // ИЗМЕНЕНО: Вызываем файловый диалог через Core.platform
-            Core.platform.showFileChooser(true, "Выбор изображения", "png", file -> {
+            // ИЗМЕНЕНО: Вызываем файловый диалог через Vars.platform
+            Vars.platform.showFileChooser(true, "Выбор изображения", "png", file -> {
                 if (file != null && file.exists()) {
                     Log.info("Выбран файл: " + file.path());
                     Vars.ui.showInfo("Выбран файл: " + file.name());
