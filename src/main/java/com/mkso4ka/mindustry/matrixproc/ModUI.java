@@ -33,7 +33,7 @@ public class ModUI {
             Table schematicsButtons = Vars.ui.schematics.buttons;
             schematicsButtons.button("PictureToLogic", Icon.image, ModUI::showSettingsDialog).size(180, 64).padLeft(6);
         } catch (Exception e) {
-            Log.err("Failed to build PictureToLogic UI!", e);
+            WebLogger.err("Failed to build PictureToLogic UI!", e);
         }
     }
 
@@ -145,7 +145,7 @@ public class ModUI {
                 LogicCore logic = new LogicCore();
                 result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay);
             } catch (Exception e) {
-                Log.err("Критическая ошибка при создании чертежа!", e);
+                WebLogger.err("Критическая ошибка при создании чертежа!", e);
             } finally {
                 Vars.ui.loadfrag.hide();
                 

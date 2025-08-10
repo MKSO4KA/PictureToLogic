@@ -84,7 +84,7 @@ public class LogicCore {
             return new ProcessingResult(schematic, finalMatrix, finalDisplays, displaySize);
 
         } catch (Exception e) {
-            Log.err("Критическая ошибка в LogicCore!", e);
+            WebLogger.err("Критическая ошибка в LogicCore!", e);
             return null;
         }
     }

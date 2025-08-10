@@ -59,7 +59,7 @@ class DisplayProcessorMatrixFinal {
     }
 
     public void placeProcessors() {
-        Log.info("Запуск стратегического алгоритма с приоритетом по нужде...");
+        WebLogger.info("Запуск стратегического алгоритма с приоритетом по нужде...");
         List<Point2> allPossibleSpots = new ArrayList<>();
         for (int y = 0; y < n; y++) {
             for (int x = 0; x < m; x++) {
@@ -68,7 +68,7 @@ class DisplayProcessorMatrixFinal {
                 }
             }
         }
-        Log.info("Найдено " + allPossibleSpots.size() + " возможных мест для процессоров.");
+        WebLogger.info("Найдено " + allPossibleSpots.size() + " возможных мест для процессоров.");
 
         boolean[][] isSpotTaken = new boolean[n][m];
         List<DisplayInfo> sortedDisplays = new ArrayList<>();
@@ -104,10 +104,10 @@ class DisplayProcessorMatrixFinal {
                 }
             }
             if (placedCount < needed) {
-                Log.warn("   -> ВНИМАНИЕ: Дисплей " + display.id + " получил только " + placedCount + " из " + needed + " процессоров. Не хватило физического места.");
+                WebLogger.warn("   -> ВНИМАНИЕ: Дисплей " + display.id + " получил только " + placedCount + " из " + needed + " процессоров. Не хватило физического места.");
             }
         }
-        Log.info("Размещение требуемых процессоров завершено.");
+        WebLogger.info("Размещение требуемых процессоров завершено.");
     }
 
     private boolean isWithinProcessorReachOfAnyDisplay(Point2 p) {
