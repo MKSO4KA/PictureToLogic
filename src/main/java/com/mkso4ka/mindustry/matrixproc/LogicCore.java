@@ -23,7 +23,6 @@ public class LogicCore {
     private static final int COMMANDS_PER_PROCESSOR = 989;
     private static final int BORDER_SIZE = 8;
 
-    // ИЗМЕНЕНО: Метод теперь возвращает ProcessingResult
     public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock) {
         try {
             int displaySize = displayBlock.size;
@@ -82,7 +81,6 @@ public class LogicCore {
 
             Schematic schematic = buildSchematic(finalMatrix, finalDisplays, codeMap, displayBlock);
 
-            // Возвращаем контейнер с результатом и данными для отладки
             return new ProcessingResult(schematic, finalMatrix, finalDisplays, displaySize);
 
         } catch (Exception e) {
@@ -114,6 +112,7 @@ public class LogicCore {
                     LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
                     build.tile = new Tile(schemX, schemY);
                     
+                    // Вычисляем координаты одной из центральных клеток для надежной связи
                     int linkToX = ownerDisplay.bottomLeft.x + displayBlock.size / 2;
                     int linkToY = ownerDisplay.bottomLeft.y + displayBlock.size / 2;
                     
@@ -125,8 +124,14 @@ public class LogicCore {
             }
         }
 
+        // Размещаем дисплеи
         for (DisplayInfo display : displays) {
-            tiles.add(new Stile(displayBlock, (short)display.bottomLeft.x, (short)display.bottomLeft.y, null, (byte) 0));
+            // --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
+            // Мы должны передать в Stile не bottomLeft, а ЦЕНТР блока.
+            // Игра сама вычислит из центра, где должен быть bottomLeft.
+            int centerX = display.bottomLeft.x + displayBlock.size / 2;
+            int centerY = display.bottomLeft.y + displayBlock.size / 2;
+            tiles.add(new Stile(displayBlock, (short)centerX, (short)centerY, null, (byte) 0));
         }
         
         StringMap tags = new StringMap();
