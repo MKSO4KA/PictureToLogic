@@ -1,28 +1,25 @@
 // core/build.gradle
 plugins {
     id 'com.android.library'
-    id 'java-library'
+    // УБРАНО: id 'java-library' - он конфликтует с Android плагином
 }
 
 group = 'com.mkso4ka.mindustry.matrixproc'
 version = '1.0'
 
-// Настройки Android
 android {
     namespace 'com.mkso4ka.mindustry.matrixproc'
-    compileSdk 33 // Стандартный SDK для современных модов
+    compileSdk 33
 
     defaultConfig {
         minSdk 21
     }
 
-    // Указываем, что мы пишем на Java 8
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
-    // Отключаем ненужные для мода Android-функции
     buildFeatures {
         androidResources false
         resValues false
@@ -30,44 +27,28 @@ android {
     }
 }
 
-repositories {
-    mavenCentral()
-    maven { url "https://raw.githubusercontent.com/Zelaux/MindustryRepo/master/repository" }
-    maven { url "https://raw.githubusercontent.com/Anuken/Mindustry/mvn-repo/repository" }
-    maven { url "https://jitpack.io" }
-}
+// УБРАНО: Секция repositories перенесена в settings.gradle
+// repositories { ... }
 
 ext{
     mindustryVersion = "v147"
 }
 
 dependencies {
-    // Зависимости Mindustry, которые не нужно включать в JAR
     compileOnly "com.github.Anuken.Mindustry:core:${mindustryVersion}"
     compileOnly "com.github.Anuken.Arc:arc-core:${mindustryVersion}"
-    // Android-версия Mindustry, нужна для компиляции под Android
     compileOnly "com.github.Anuken.Mindustry:android:${mindustryVersion}"
-
-    // Наша библиотека для веб-сервера.
     implementation 'org.nanohttpd:nanohttpd:2.3.1'
 }
 
-// --- НОВАЯ ЗАДАЧА ДЛЯ СОЗДАНИЯ УНИВЕРСАЛЬНОГО JAR ---
 task deploy(type: Jar) {
     archiveFileName = "PictureToLogic.jar"
     
-    // Включаем ресурсы (mod.hjson)
     from sourceSets.main.resources
-
-    // Включаем скомпилированные классы для ПК
     from sourceSets.main.java.classesDirectory
-
-    // Включаем классы всех 'implementation' зависимостей (NanoHTTPD)
     from {
         configurations.implementation.collect { it.isDirectory() ? it : zipTree(it) }
     }
-
-    // Включаем классы, обработанные для Android (.dex)
     from(zipTree(project.tasks.getByName("bundleReleaseAar").outputs.files.singleFile)) {
         include "classes.jar"
         rename 'classes.jar', 'classes.dex'

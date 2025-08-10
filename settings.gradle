@@ -11,6 +11,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // --- ДОБАВЛЯЕМ РЕПОЗИТОРИИ MINDUSRY СЮДА ---
+        maven { url "https://raw.githubusercontent.com/Zelaux/MindustryRepo/master/repository" }
+        maven { url "https://raw.githubusercontent.com/Anuken/Mindustry/mvn-repo/repository" }
+        maven { url "https://jitpack.io" }
     }
 }
 rootProject.name = "PictureToLogic"
