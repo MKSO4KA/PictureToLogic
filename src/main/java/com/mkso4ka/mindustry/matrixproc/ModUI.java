@@ -20,11 +20,10 @@ import mindustry.world.blocks.logic.LogicDisplay;
 
 public class ModUI {
 
-    // Убраны TextField, они больше не нужны
-    private static LogicDisplay selectedDisplay = (LogicDisplay) Blocks.hyperLogicDisplay; // Гипер-дисплей по умолчанию
+    // ИСПОЛЬЗУЕМ largeLogicDisplay ПО УМОЛЧАНИЮ
+    private static LogicDisplay selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay; 
     private static boolean showDebug = true;
 
-    // Переменные для хранения ссылок на UI элементы, чтобы их обновлять
     private static Slider xSlider, ySlider;
     private static Label xLabel, yLabel;
     private static Table previewTable;
@@ -45,12 +44,10 @@ public class ModUI {
         Table content = dialog.cont;
         content.defaults().pad(8);
 
-        // --- Верхняя панель: Слайдеры и предпросмотр ---
         Table topPanel = new Table();
         Table sliders = new Table();
         sliders.defaults().pad(2);
 
-        // Слайдер для X
         xSlider = new Slider(1, 10, 1, false);
         xLabel = new Label("1");
         sliders.add("Дисплеев по X:").left();
@@ -58,42 +55,45 @@ public class ModUI {
         sliders.add(xLabel).left();
         sliders.row();
 
-        // Слайдер для Y
         ySlider = new Slider(1, 10, 1, false);
         yLabel = new Label("1");
         sliders.add("Дисплеев по Y:").left();
         sliders.add(ySlider).width(200f).padLeft(10).padRight(10);
         sliders.add(yLabel).left();
 
-        // Панель предпросмотра
         previewTable = new Table();
         previewTable.setBackground(Tex.buttonDown);
 
-        // Добавляем панели в верхнюю часть
         topPanel.add(sliders);
         topPanel.add(previewTable).padLeft(20);
         content.add(topPanel).row();
 
-        // --- Средняя панель: Выбор типа дисплея ---
         content.add("Тип дисплея:").left().padTop(20).row();
         Table displaySelector = new Table();
         ButtonGroup<TextButton> group = new ButtonGroup<>();
         group.setMinCheckCount(1);
 
-        TextButton largeDisplayButton = new TextButton("Большой дисплей (3x3)", Styles.togglet);
-        largeDisplayButton.clicked(() -> selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay);
+        // Кнопка для 3x3 дисплея (logicDisplay)
+        TextButton logicDisplayButton = new TextButton("Логический дисплей (3x3)", Styles.togglet);
+        logicDisplayButton.clicked(() -> selectedDisplay = (LogicDisplay) Blocks.logicDisplay);
         
-        TextButton hyperDisplayButton = new TextButton("Гипер-дисплей (6x6)", Styles.togglet);
-        hyperDisplayButton.clicked(() -> selectedDisplay = (LogicDisplay) Blocks.hyperLogicDisplay);
+        // Кнопка для 6x6 дисплея (largeLogicDisplay)
+        TextButton largeLogicDisplayButton = new TextButton("Большой дисплей (6x6)", Styles.togglet);
+        largeLogicDisplayButton.clicked(() -> selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay);
         
-        group.add(largeDisplayButton, hyperDisplayButton);
-        hyperDisplayButton.setChecked(true); // Выбран по умолчанию
+        group.add(logicDisplayButton, largeLogicDisplayButton);
+        
+        // Устанавливаем, какая кнопка будет выбрана по умолчанию
+        if (selectedDisplay == Blocks.largeLogicDisplay) {
+            largeLogicDisplayButton.setChecked(true);
+        } else {
+            logicDisplayButton.setChecked(true);
+        }
 
-        displaySelector.add(largeDisplayButton).size(240, 60);
-        displaySelector.add(hyperDisplayButton).size(240, 60).padLeft(10);
+        displaySelector.add(logicDisplayButton).size(240, 60);
+        displaySelector.add(largeLogicDisplayButton).size(240, 60).padLeft(10);
         content.add(displaySelector).row();
 
-        // --- Нижняя панель: Опции и действия ---
         content.check("Показывать отладочное окно", showDebug, b -> showDebug = b).left().padTop(20).row();
 
         content.button("Выбрать и создать чертеж", Icon.file, () -> {
@@ -107,7 +107,6 @@ public class ModUI {
             });
         }).padTop(20).growX().height(60);
 
-        // --- Инициализация и слушатели ---
         xSlider.changed(() -> {
             xLabel.setText(String.valueOf((int)xSlider.getValue()));
             updatePreview();
@@ -116,12 +115,11 @@ public class ModUI {
             yLabel.setText(String.valueOf((int)ySlider.getValue()));
             updatePreview();
         });
-        updatePreview(); // Первоначальная отрисовка предпросмотра
+        updatePreview();
 
         dialog.show();
     }
 
-    // Новый метод для обновления сетки предпросмотра
     private static void updatePreview() {
         int x = (int) xSlider.getValue();
         int y = (int) ySlider.getValue();
@@ -141,7 +139,6 @@ public class ModUI {
         new Thread(() -> {
             ProcessingResult result = null;
             try {
-                // Получаем значения из слайдеров
                 int displaysX = (int) xSlider.getValue();
                 int displaysY = (int) ySlider.getValue();
 
