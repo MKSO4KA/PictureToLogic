@@ -4,9 +4,13 @@ import arc.math.geom.Point2;
 import arc.util.Log;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+
+// ИСПРАВЛЕНО: Убраны лишние импорты, которые больше не нужны
+// import java.util.Queue;
+// import java.util.LinkedList;
+// import java.util.HashMap;
+// import java.util.Map;
 
 class DisplayProcessorMatrixFinal {
 
@@ -73,66 +77,59 @@ class DisplayProcessorMatrixFinal {
         }
     }
 
-    // --- АЛГОРИТМ СТРАТЕГИЧЕСКОГО РАСПРЕДЕЛЕНИЯ С ПРИОРИТЕТОМ ---
+    // --- ФИНАЛЬНЫЙ АЛГОРИТМ: СТРАТЕГИЧЕСКОЕ РАЗМЕЩЕНИЕ ТОЛЬКО НЕОБХОДИМОГО ---
     public void placeProcessors() {
         Log.info("Запуск стратегического алгоритма с приоритетом по нужде...");
 
-        // --- ЭТАП 1: Инвентаризация доступных мест для каждого дисплея ---
+        // --- ЭТАП 1: Инвентаризация всех доступных мест ---
         Log.info("Этап 1: Инвентаризация всех доступных мест...");
-        Map<Integer, List<Spot>> reachableSpotsByDisplay = new HashMap<>();
-        boolean[][] isSpotTaken = new boolean[n][m];
-
-        for (DisplayInfo display : displays) {
-            List<Spot> spots = new ArrayList<>();
-            for (int y = 0; y < n; y++) {
-                for (int x = 0; x < m; x++) {
-                    if (matrix[y][x].type == 0) { // Если клетка пустая
-                        Point2 p = new Point2(x, y);
-                        double distSq = distanceSqFromPointToRectangle(p, display);
-                        if (distSq <= PROCESSOR_REACH_SQ) {
-                            spots.add(new Spot(p, distSq));
-                        }
-                    }
+        List<Point2> allPossibleSpots = new ArrayList<>();
+        for (int y = 0; y < n; y++) {
+            for (int x = 0; x < m; x++) {
+                if (matrix[y][x].type == 0 && isWithinProcessorReachOfAnyDisplay(new Point2(x, y))) {
+                    allPossibleSpots.add(new Point2(x, y));
                 }
             }
-            // Сортируем места для этого дисплея по расстоянию (от ближайшего к дальнему)
-            spots.sort(Comparator.comparingDouble(s -> s.distanceSq));
-            reachableSpotsByDisplay.put(display.id, spots);
         }
+        Log.info("Найдено " + allPossibleSpots.size() + " возможных мест для процессоров.");
 
-        // --- ЭТАП 2: Приоритезация дисплеев по "голоду" ---
-        Log.info("Этап 2: Приоритезация дисплеев по количеству требуемых процессоров...");
+        // --- ЭТАП 2: Приоритетное распределение для удовлетворения нужд ---
+        Log.info("Этап 2: Удовлетворение гарантированных потребностей...");
+        boolean[][] isSpotTaken = new boolean[n][m];
         List<DisplayInfo> sortedDisplays = new ArrayList<>();
-        for (DisplayInfo d : displays) {
-            sortedDisplays.add(d);
-        }
-        // Сортируем от самого нуждающегося к наименее
+        for (DisplayInfo d : displays) sortedDisplays.add(d);
         sortedDisplays.sort(Comparator.comparingInt(DisplayInfo::getProcessorsNeeded).reversed());
 
-        // --- ЭТАП 3: Распределение с учетом приоритета ---
-        Log.info("Этап 3: Распределение мест...");
         for (DisplayInfo display : sortedDisplays) {
             int needed = display.getProcessorsNeeded();
             if (needed == 0) continue;
 
-            Log.info(" -> Обслуживаем дисплей " + display.id + " (требуется " + needed + " процессоров)");
-            int placedCount = 0;
-            List<Spot> potentialSpots = reachableSpotsByDisplay.get(display.id);
-
-            for (Spot spot : potentialSpots) {
-                if (placedCount >= needed) {
-                    break; // Этот дисплей уже получил всё, что ему нужно
+            // Собираем список всех доступных и подходящих для *этого* дисплея мест
+            List<Spot> potentialSpots = new ArrayList<>();
+            for (Point2 spotLoc : allPossibleSpots) {
+                if (!isSpotTaken[spotLoc.y][spotLoc.x]) {
+                    double distSq = distanceSqFromPointToRectangle(spotLoc, display);
+                    if (distSq <= PROCESSOR_REACH_SQ) {
+                        potentialSpots.add(new Spot(spotLoc, distSq));
+                    }
                 }
+            }
+            // Сортируем их, чтобы выбрать лучшие (ближайшие)
+            potentialSpots.sort(Comparator.comparingDouble(s -> s.distanceSq));
 
+            int placedCount = 0;
+            for (Spot spot : potentialSpots) {
+                if (placedCount >= needed) break;
+                
                 Point2 loc = spot.location;
-                // Если это место еще не занято другим, более приоритетным дисплеем
+                // Двойная проверка, что место не занято (на случай гонки)
                 if (!isSpotTaken[loc.y][loc.x]) {
                     matrix[loc.y][loc.x].type = 1;
                     matrix[loc.y][loc.x].ownerId = display.id;
                     matrix[loc.y][loc.x].processorIndex = display.processorsPlaced;
                     display.processorsPlaced++;
                     
-                    isSpotTaken[loc.y][loc.x] = true; // Занимаем место
+                    isSpotTaken[loc.y][loc.x] = true; // Занимаем место глобально
                     placedCount++;
                 }
             }
@@ -140,7 +137,19 @@ class DisplayProcessorMatrixFinal {
                 Log.warn("   -> ВНИМАНИЕ: Дисплей " + display.id + " получил только " + placedCount + " из " + needed + " процессоров. Не хватило физического места.");
             }
         }
-        Log.info("Размещение завершено.");
+        
+        // --- ЭТАП 3 УДАЛЕН ---
+        // Мы больше не заполняем оставшиеся места. Алгоритм завершается здесь.
+        Log.info("Размещение требуемых процессоров завершено.");
+    }
+
+    private boolean isWithinProcessorReachOfAnyDisplay(Point2 p) {
+        for (DisplayInfo display : displays) {
+            if (distanceSqFromPointToRectangle(p, display) <= PROCESSOR_REACH_SQ) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private double distanceSqFromPointToRectangle(Point2 p, DisplayInfo display) {
