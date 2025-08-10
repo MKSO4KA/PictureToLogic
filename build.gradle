@@ -28,16 +28,20 @@ dependencies {
     compileOnly "com.github.Anuken.Mindustry:core:${mindustryVersion}"
     compileOnly "com.github.Anuken.Arc:arc-core:${mindustryVersion}"
 
-    // --- ДОБАВЬ ЭТУ СТРОКУ ---
     // Библиотека для встроенного веб-сервера, работает на ПК и Android
     implementation 'org.nanohttpd:nanohttpd:2.3.1'
 }
 
 jar {
     archiveBaseName = "${project.name}-Desktop"
+
+    // --- ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ ---
+    // Используем 'runtimeClasspath' вместо 'implementation' для доступа к файлам зависимостей.
+    // Это стандартный и правильный способ для современных версий Gradle.
     from {
-        configurations.implementation.collect { it.isDirectory() ? it : zipTree(it) }
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
+    // ---------------------------
 }
 
 task jarAndroid (type: Jar, dependsOn: jar){
@@ -51,13 +55,10 @@ task jarAndroid (type: Jar, dependsOn: jar){
     }
 }
 
-// ИЗМЕНЕНО: Добавляем блок doLast для очистки
 task deploy(type: Jar, dependsOn: jarAndroid) {
     archiveBaseName = project.name
     from(zipTree(jar.archiveFile), zipTree(jarAndroid.archiveFile))
 
-    // Этот блок выполнится после создания финального .jar
-    // и удалит временные файлы.
     doLast {
         delete(jar.archiveFile)
         delete(jarAndroid.archiveFile)
