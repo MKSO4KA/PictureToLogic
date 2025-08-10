@@ -35,6 +35,9 @@ dependencies {
 
 jar {
     archiveBaseName = "${project.name}-Desktop"
+    from {
+        configurations.implementation.collect { it.isDirectory() ? it : zipTree(it) }
+    }
 }
 
 task jarAndroid (type: Jar, dependsOn: jar){
