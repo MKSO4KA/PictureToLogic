@@ -38,7 +38,7 @@ public class LogicCore {
             DisplayMatrix displayMatrix = new DisplayMatrix();
             MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, DisplayProcessorMatrixFinal.PROCESSOR_REACH);
 
-            int[] processorsPerDisplay = new int[blueprint.displayCoordinates.length];
+            int[] processorsPerDisplay = new int[blueprint.displayBottomLefts.length];
             Map<Integer, List<String>> codeMap = new HashMap<>();
 
             for (int i = 0; i < displaysY; i++) {
@@ -73,7 +73,7 @@ public class LogicCore {
             scaledMasterPixmap.dispose();
 
             DisplayProcessorMatrixFinal matrixFinal = new DisplayProcessorMatrixFinal(
-                blueprint.n, blueprint.m, processorsPerDisplay, blueprint.displayCoordinates, displaySize
+                blueprint.n, blueprint.m, processorsPerDisplay, blueprint.displayBottomLefts, displaySize
             );
             matrixFinal.placeProcessors();
             DisplayProcessorMatrixFinal.Cell[][] finalMatrix = matrixFinal.getMatrix();
@@ -96,41 +96,35 @@ public class LogicCore {
         for (int row = 0; row < height; row++) {
             for (int col = 0; col < width; col++) {
                 DisplayProcessorMatrixFinal.Cell cell = matrix[row][col];
-                if (cell.type == 0) continue;
-
-                short schemX = (short)col;
-                short schemY = (short)row;
-
-                if (cell.type == 1) { // Это процессор
-                    // --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
-                    // Проверяем, что у процессора есть и владелец, и валидный индекс кода
-                    if (cell.ownerId >= 0 && cell.processorIndex >= 0) {
-                        DisplayInfo ownerDisplay = displays[cell.ownerId];
-                        
-                        String code = "";
-                        List<String> codesForDisplay = codeMap.get(cell.ownerId);
-                        
-                        // Берем код строго по индексу, который был присвоен при размещении
-                        if (codesForDisplay != null && cell.processorIndex < codesForDisplay.size()) {
-                            code = codesForDisplay.get(cell.processorIndex);
-                        } else {
-                            Log.warn("Процессор в (" + schemX + ", " + schemY + ") имеет неверный индекс кода: " + cell.processorIndex + " для дисплея " + cell.ownerId);
-                        }
-
-                        LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
-                        build.tile = new Tile(schemX, schemY);
-                        
-                        build.links.add(new LogicLink(ownerDisplay.center.x, ownerDisplay.center.y, "display1", true));
-                        build.updateCode(code);
-                        
-                        tiles.add(new Stile(Blocks.microProcessor, schemX, schemY, build.config(), (byte) 0));
+                if (cell.type == 1 && cell.ownerId >= 0 && cell.processorIndex >= 0) {
+                    short schemX = (short)col;
+                    short schemY = (short)row;
+                    DisplayInfo ownerDisplay = displays[cell.ownerId];
+                    
+                    String code = "";
+                    List<String> codesForDisplay = codeMap.get(cell.ownerId);
+                    if (codesForDisplay != null && cell.processorIndex < codesForDisplay.size()) {
+                        code = codesForDisplay.get(cell.processorIndex);
                     }
+
+                    LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
+                    build.tile = new Tile(schemX, schemY);
+                    
+                    // Вычисляем координаты одной из центральных клеток для надежной связи
+                    int linkToX = ownerDisplay.bottomLeft.x + displayBlock.size / 2;
+                    int linkToY = ownerDisplay.bottomLeft.y + displayBlock.size / 2;
+                    
+                    build.links.add(new LogicLink(linkToX, linkToY, "display1", true));
+                    build.updateCode(code);
+                    
+                    tiles.add(new Stile(Blocks.microProcessor, schemX, schemY, build.config(), (byte) 0));
                 }
             }
         }
 
+        // Размещаем дисплеи по их нижним левым углам
         for (DisplayInfo display : displays) {
-            tiles.add(new Stile(displayBlock, (short)display.center.x, (short)display.center.y, null, (byte) 0));
+            tiles.add(new Stile(displayBlock, (short)display.bottomLeft.x, (short)display.bottomLeft.y, null, (byte) 0));
         }
         
         StringMap tags = new StringMap();
