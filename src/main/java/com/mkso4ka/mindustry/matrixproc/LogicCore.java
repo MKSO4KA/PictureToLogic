@@ -37,6 +37,7 @@ public class LogicCore {
             scaledMasterPixmap.draw(masterPixmap, 0, 0, masterPixmap.width, masterPixmap.height, 0, 0, totalWidth, totalHeight);
             masterPixmap.dispose();
 
+            // ВЫЗЫВАЕМ ВАШУ ЛОГИКУ СОЗДАНИЯ СЕТКИ
             DisplayMatrix displayMatrix = new DisplayMatrix();
             MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, DisplayProcessorMatrixFinal.PROCESSOR_REACH);
 
@@ -80,6 +81,7 @@ public class LogicCore {
             }
             scaledMasterPixmap.dispose();
 
+            // ВЫЗЫВАЕМ ВАШ АЛГОРИТМ РАЗМЕЩЕНИЯ
             DisplayProcessorMatrixFinal matrixFinal = new DisplayProcessorMatrixFinal(
                 blueprint.n, blueprint.m, processorsPerDisplay, blueprint.displayCoordinates, displaySize
             );
@@ -95,11 +97,10 @@ public class LogicCore {
         }
     }
 
+    // ИСПОЛЬЗУЕМ ГАРАНТИРОВАННЫЙ МЕТОД СБОРКИ
     private Schematic buildSchematic(DisplayProcessorMatrixFinal.Cell[][] matrix, DisplayInfo[] displays, Map<Integer, List<String>> codeMap, Block displayBlock) {
         Seq<Stile> tiles = new Seq<>();
         
-        // --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Гарантированное размещение ---
-
         // ЭТАП 1: Размещаем все дисплеи. Ни больше, ни меньше.
         for (DisplayInfo display : displays) {
             short schemX = (short)display.center.x;
@@ -115,7 +116,6 @@ public class LogicCore {
             for (int y = 0; y < height; y++) {
                 DisplayProcessorMatrixFinal.Cell cell = matrix[x][y];
                 
-                // Нас интересуют только процессоры
                 if (cell.type == 1 && cell.ownerId >= 0) {
                     short schemX = (short)x;
                     short schemY = (short)y;
@@ -142,8 +142,6 @@ public class LogicCore {
         tags.put("name", "PictureToLogic-Schematic");
         return new Schematic(tiles, tags, width, height);
     }
-    
-    // Метод isCenterOfBlock больше не нужен, его можно удалить.
 
     // ... (остальные вспомогательные методы остаются без изменений) ...
     private List<String> generateCommandList(Map<Integer, List<Rect>> rects, int displayPixelSize, int offsetX, int offsetY) {

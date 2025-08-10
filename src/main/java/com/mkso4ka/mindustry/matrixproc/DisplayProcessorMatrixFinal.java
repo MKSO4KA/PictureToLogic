@@ -1,6 +1,6 @@
 package com.mkso4ka.mindustry.matrixproc;
 
-import arc.math.geom.Point2; // ИЗМЕНЕНИЕ: Используем Point2 из Arc
+import arc.math.geom.Point2;
 import arc.util.Log;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Queue;
 import java.util.Set;
 
+// ВАШ АЛГОРИТМ РАЗМЕЩЕНИЯ
 class DisplayProcessorMatrixFinal {
 
     static class Cell {
@@ -37,7 +38,6 @@ class DisplayProcessorMatrixFinal {
         }
         this.displays = new DisplayInfo[displayCenters.length];
         for (int i = 0; i < displayCenters.length; i++) {
-            // ИЗМЕНЕНИЕ: Создаем Point2 вместо Point
             Point2 center = new Point2(displayCenters[i][0], displayCenters[i][1]);
             displays[i] = new DisplayInfo(i, center, processorsPerDisplay[i]);
             placeSingleDisplay(displays[i], displaySize);
@@ -68,11 +68,12 @@ class DisplayProcessorMatrixFinal {
         }
     }
 
+    // ВАШ ИДЕАЛЬНЫЙ АЛГОРИТМ
     public void placeProcessors() {
-        Log.info("Этап 1: Максимальное заполнение...");
-        Queue<Point2> queue = new LinkedList<>(); // ИЗМЕНЕНИЕ: Используем Point2
-        Set<Point2> visited = new HashSet<>(); // ИЗМЕНЕНИЕ: Используем Point2
-        List<Point2> genericProcessors = new ArrayList<>(); // ИЗМЕНЕНИЕ: Используем Point2
+        Log.info("Этап 1: Максимальное заполнение (с радиусом процессора " + PROCESSOR_REACH + ")");
+        Queue<Point2> queue = new LinkedList<>();
+        Set<Point2> visited = new HashSet<>();
+        List<Point2> genericProcessors = new ArrayList<>();
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < m; j++) {
                 if (matrix[i][j].type == 2) {
@@ -81,7 +82,7 @@ class DisplayProcessorMatrixFinal {
                             if (dx == 0 && dy == 0) continue;
                             int nx = i + dx;
                             int ny = j + dy;
-                            Point2 neighbor = new Point2(nx, ny); // ИЗМЕНЕНИЕ: Используем Point2
+                            Point2 neighbor = new Point2(nx, ny);
                             if (nx >= 0 && nx < n && ny >= 0 && ny < m && matrix[nx][ny].type == 0 && !visited.contains(neighbor) && isWithinProcessorReachOfAnyDisplay(neighbor)) {
                                 queue.add(neighbor);
                                 visited.add(neighbor);
@@ -92,7 +93,7 @@ class DisplayProcessorMatrixFinal {
             }
         }
         while (!queue.isEmpty()) {
-            Point2 current = queue.poll(); // ИЗМЕНЕНИЕ: Используем Point2
+            Point2 current = queue.poll();
             matrix[current.x][current.y].type = 1;
             matrix[current.x][current.y].ownerId = -2;
             genericProcessors.add(current);
@@ -101,7 +102,7 @@ class DisplayProcessorMatrixFinal {
                     if (dx == 0 && dy == 0) continue;
                     int nx = current.x + dx;
                     int ny = current.y + dy;
-                    Point2 neighbor = new Point2(nx, ny); // ИЗМЕНЕНИЕ: Используем Point2
+                    Point2 neighbor = new Point2(nx, ny);
                     if (nx >= 0 && nx < n && ny >= 0 && ny < m && matrix[nx][ny].type == 0 && !visited.contains(neighbor) && isWithinProcessorReachOfAnyDisplay(neighbor)) {
                         queue.add(neighbor);
                         visited.add(neighbor);
@@ -109,9 +110,9 @@ class DisplayProcessorMatrixFinal {
                 }
             }
         }
-        Log.info("Завершено. Найдено " + genericProcessors.size() + " мест.");
-        Log.info("Этап 2: Оптимальное распределение...");
-        for (Point2 procPoint : genericProcessors) { // ИЗМЕНЕНИЕ: Используем Point2
+        Log.info("Заполнение завершено. Найдено " + genericProcessors.size() + " возможных мест для процессоров.");
+        Log.info("Этап 2: Оптимальное распределение процессоров...");
+        for (Point2 procPoint : genericProcessors) {
             DisplayInfo bestOwner = null;
             double minDistanceSq = Double.MAX_VALUE;
             for (DisplayInfo display : displays) {
@@ -133,7 +134,7 @@ class DisplayProcessorMatrixFinal {
         }
     }
 
-    private boolean isWithinProcessorReachOfAnyDisplay(Point2 p) { // ИЗМЕНЕНИЕ: Используем Point2
+    private boolean isWithinProcessorReachOfAnyDisplay(Point2 p) {
         for (DisplayInfo display : displays) {
             if (distanceSqFromPointToRectangle(p, display) <= PROCESSOR_REACH_SQ) {
                 return true;
@@ -142,7 +143,7 @@ class DisplayProcessorMatrixFinal {
         return false;
     }
 
-    private double distanceSqFromPointToRectangle(Point2 p, DisplayInfo display) { // ИЗМЕНЕНИЕ: Используем Point2
+    private double distanceSqFromPointToRectangle(Point2 p, DisplayInfo display) {
         int halfSize = displaySize / 2;
         int minX = display.center.x - halfSize;
         int maxX = display.center.x + ((displaySize % 2 == 0) ? halfSize - 1 : halfSize);
