@@ -13,11 +13,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ИЗМЕНЕНО: Используем специальное действие для установки Java и Android SDK
-      - name: Set up JDK and Android SDK
-        uses: Anuken/actions-android-ci@v2
+      # --- НАЧАЛО ИЗМЕНЕНИЙ ---
+
+      # ШАГ 1: Устанавливаем Java 17 для запуска Gradle.
+      # Это стандартное, официальное действие.
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
-            java-version: '17' # Java 17 для запуска Gradle
+          java-version: '17'
+          distribution: 'temurin'
+
+      # ШАГ 2: Устанавливаем Android SDK.
+      # Это тоже стандартное действие, которое установит все необходимое
+      # и пропишет переменную окружения ANDROID_HOME.
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      # --- КОНЕЦ ИЗМЕНЕНИЙ ---
 
       - name: Grant execute permission to gradlew
         run: chmod +x gradlew
@@ -25,7 +37,7 @@ jobs:
       - name: Clean project
         run: ./gradlew clean
 
-      # ИЗМЕНЕНО: Вызываем задачу 'deploy' вместо 'jar'
+      # Вызываем нашу универсальную задачу 'deploy'
       - name: Build Universal Jar with Gradle
         run: ./gradlew deploy
 
@@ -34,6 +46,5 @@ jobs:
         with:
           name: MyJavaMod
           path: build/libs/*.jar
-          # Исключаем временные файлы, чтобы остался только один, финальный .jar
           if-no-files-found: error
           retention-days: 7
