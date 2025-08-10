@@ -4,4 +4,4 @@ author: "MKSO4KA"
 main: "com.mkso4ka.mindustry.matrixproc.PictureToLogicMod" # <--- Убедитесь, что эта строка правильная
 description: "Преобразует изображения в чертежи для логических дисплеев."
 version: "1.0"
-minGameVersion: "146"
+minGameVersion: "147"
