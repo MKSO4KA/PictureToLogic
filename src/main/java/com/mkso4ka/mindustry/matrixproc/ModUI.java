@@ -2,28 +2,32 @@ package com.mkso4ka.mindustry.matrixproc;
 
 import arc.Core;
 import arc.files.Fi;
+import arc.scene.ui.ButtonGroup;
+import arc.scene.ui.Image;
 import arc.scene.ui.Label;
 import arc.scene.ui.ScrollPane;
-import arc.scene.ui.TextField;
+import arc.scene.ui.Slider;
+import arc.scene.ui.TextButton;
 import arc.scene.ui.layout.Table;
-import arc.struct.Seq;
 import arc.util.Log;
 import mindustry.Vars;
-import mindustry.game.Schematic;
+import mindustry.content.Blocks;
 import mindustry.gen.Icon;
+import mindustry.gen.Tex;
 import mindustry.ui.Styles;
 import mindustry.ui.dialogs.BaseDialog;
-import mindustry.world.blocks.ItemSelection;
 import mindustry.world.blocks.logic.LogicDisplay;
-import mindustry.content.Blocks;
 
 public class ModUI {
 
-    private static TextField displaysXField;
-    private static TextField displaysYField;
-    private static LogicDisplay selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay;
-    // НОВАЯ ПЕРЕМЕННАЯ: Флаг для управления показом отладочного окна
+    // Убраны TextField, они больше не нужны
+    private static LogicDisplay selectedDisplay = (LogicDisplay) Blocks.hyperLogicDisplay; // Гипер-дисплей по умолчанию
     private static boolean showDebug = true;
+
+    // Переменные для хранения ссылок на UI элементы, чтобы их обновлять
+    private static Slider xSlider, ySlider;
+    private static Label xLabel, yLabel;
+    private static Table previewTable;
 
     public static void build() {
         try {
@@ -36,30 +40,61 @@ public class ModUI {
 
     private static void showSettingsDialog() {
         BaseDialog dialog = new BaseDialog("Настройки PictureToLogic");
+        dialog.addCloseButton();
 
         Table content = dialog.cont;
-        content.defaults().pad(4);
+        content.defaults().pad(8);
 
-        content.add("Дисплеев по X:").padRight(10);
-        displaysXField = new TextField("1");
-        displaysXField.setValidator(text -> text.matches("[0-9]+") && Integer.parseInt(text) > 0);
-        content.add(displaysXField).width(100f).row();
+        // --- Верхняя панель: Слайдеры и предпросмотр ---
+        Table topPanel = new Table();
+        Table sliders = new Table();
+        sliders.defaults().pad(2);
 
-        content.add("Дисплеев по Y:").padRight(10);
-        displaysYField = new TextField("1");
-        displaysYField.setValidator(text -> text.matches("[0-9]+") && Integer.parseInt(text) > 0);
-        content.add(displaysYField).width(100f).row();
+        // Слайдер для X
+        xSlider = new Slider(1, 10, 1, false);
+        xLabel = new Label("1");
+        sliders.add("Дисплеев по X:").left();
+        sliders.add(xSlider).width(200f).padLeft(10).padRight(10);
+        sliders.add(xLabel).left();
+        sliders.row();
 
-        content.add("Тип дисплея:").colspan(2).left().row();
+        // Слайдер для Y
+        ySlider = new Slider(1, 10, 1, false);
+        yLabel = new Label("1");
+        sliders.add("Дисплеев по Y:").left();
+        sliders.add(ySlider).width(200f).padLeft(10).padRight(10);
+        sliders.add(yLabel).left();
+
+        // Панель предпросмотра
+        previewTable = new Table();
+        previewTable.setBackground(Tex.buttonDown);
+
+        // Добавляем панели в верхнюю часть
+        topPanel.add(sliders);
+        topPanel.add(previewTable).padLeft(20);
+        content.add(topPanel).row();
+
+        // --- Средняя панель: Выбор типа дисплея ---
+        content.add("Тип дисплея:").left().padTop(20).row();
         Table displaySelector = new Table();
-        Seq<LogicDisplay> displays = Vars.content.blocks().select(b -> b instanceof LogicDisplay).as();
-        ItemSelection.buildTable(displaySelector, displays, () -> selectedDisplay, d -> {
-            selectedDisplay = d;
-        });
-        content.add(displaySelector).colspan(2).left().row();
+        ButtonGroup<TextButton> group = new ButtonGroup<>();
+        group.setMinCheckCount(1);
 
-        // НОВЫЙ ЭЛЕМЕНТ: Галочка для включения/отключения отладки
-        content.check("Показывать отладочное окно", showDebug, b -> showDebug = b).colspan(2).left().padTop(10).row();
+        TextButton largeDisplayButton = new TextButton("Большой дисплей (3x3)", Styles.togglet);
+        largeDisplayButton.clicked(() -> selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay);
+        
+        TextButton hyperDisplayButton = new TextButton("Гипер-дисплей (6x6)", Styles.togglet);
+        hyperDisplayButton.clicked(() -> selectedDisplay = (LogicDisplay) Blocks.hyperLogicDisplay);
+        
+        group.add(largeDisplayButton, hyperDisplayButton);
+        hyperDisplayButton.setChecked(true); // Выбран по умолчанию
+
+        displaySelector.add(largeDisplayButton).size(240, 60);
+        displaySelector.add(hyperDisplayButton).size(240, 60).padLeft(10);
+        content.add(displaySelector).row();
+
+        // --- Нижняя панель: Опции и действия ---
+        content.check("Показывать отладочное окно", showDebug, b -> showDebug = b).left().padTop(20).row();
 
         content.button("Выбрать и создать чертеж", Icon.file, () -> {
             Vars.platform.showFileChooser(true, "Выбор изображения", "png", file -> {
@@ -70,10 +105,34 @@ public class ModUI {
                     Vars.ui.showInfo("Файл не выбран.");
                 }
             });
-        }).padTop(20).colspan(2).growX();
+        }).padTop(20).growX().height(60);
 
-        dialog.buttons.button("Закрыть", Icon.cancel, dialog::hide).size(150, 54);
+        // --- Инициализация и слушатели ---
+        xSlider.changed(() -> {
+            xLabel.setText(String.valueOf((int)xSlider.getValue()));
+            updatePreview();
+        });
+        ySlider.changed(() -> {
+            yLabel.setText(String.valueOf((int)ySlider.getValue()));
+            updatePreview();
+        });
+        updatePreview(); // Первоначальная отрисовка предпросмотра
+
         dialog.show();
+    }
+
+    // Новый метод для обновления сетки предпросмотра
+    private static void updatePreview() {
+        int x = (int) xSlider.getValue();
+        int y = (int) ySlider.getValue();
+
+        previewTable.clear();
+        for (int i = 0; i < y; i++) {
+            for (int j = 0; j < x; j++) {
+                previewTable.add(new Image(Styles.black6)).size(24).pad(2);
+            }
+            previewTable.row();
+        }
     }
 
     private static void generateAndShowSchematic(Fi imageFile) {
@@ -82,8 +141,9 @@ public class ModUI {
         new Thread(() -> {
             ProcessingResult result = null;
             try {
-                int displaysX = Integer.parseInt(displaysXField.getText());
-                int displaysY = Integer.parseInt(displaysYField.getText());
+                // Получаем значения из слайдеров
+                int displaysX = (int) xSlider.getValue();
+                int displaysY = (int) ySlider.getValue();
 
                 LogicCore logic = new LogicCore();
                 result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay);
@@ -95,11 +155,9 @@ public class ModUI {
                 ProcessingResult finalResult = result;
                 Core.app.post(() -> {
                     if (finalResult != null && finalResult.schematic != null) {
-                        // ИЗМЕНЕНО: Проверяем флаг перед показом диалога
                         if (showDebug) {
                             showDebugDialog(finalResult);
                         } else {
-                            // Если дебаг отключен, сразу строим схему
                             Vars.ui.schematics.hide();
                             Vars.control.input.useSchematic(finalResult.schematic);
                         }
