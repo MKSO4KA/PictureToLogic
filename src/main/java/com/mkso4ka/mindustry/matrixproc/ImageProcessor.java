@@ -2,8 +2,6 @@ package com.mkso4ka.mindustry.matrixproc;
 
 import arc.graphics.Color;
 import arc.graphics.Pixmap;
-import arc.graphics.g2d.Draw;
-import arc.graphics.g2d.Fill;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -157,17 +155,12 @@ public class ImageProcessor {
         Pixmap copy = new Pixmap(source.getWidth(), source.getHeight());
         copy.draw(source);
         
-        Draw.begin(copy);
         for (List<Rect> rectList : rects.values()) {
             for (Rect rect : rectList) {
-                Draw.color(Color.red);
-                Fill.rect(rect.x, rect.y, rect.w, 1);
-                Fill.rect(rect.x, rect.y + rect.h - 1, rect.w, 1);
-                Fill.rect(rect.x, rect.y, 1, rect.h);
-                Fill.rect(rect.x + rect.w - 1, rect.y, 1, rect.h);
+                copy.setColor(Color.red);
+                copy.drawRect(rect.x, rect.y, rect.w, rect.h);
             }
         }
-        Draw.end();
         return copy;
     }
 }

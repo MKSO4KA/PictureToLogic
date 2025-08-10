@@ -2,6 +2,8 @@ package com.mkso4ka.mindustry.matrixproc;
 
 import arc.files.Fi;
 import arc.func.Cons;
+import arc.graphics.Pixmap;
+import arc.graphics.g2d.PngWriter;
 import arc.scene.ui.Button;
 import arc.scene.ui.CheckBox;
 import arc.scene.ui.Slider;
@@ -12,6 +14,7 @@ import fi.iki.elonen.NanoHTTPD;
 import mindustry.Vars;
 import mindustry.ui.dialogs.BaseDialog;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -62,14 +65,14 @@ public class WebLogger extends NanoHTTPD {
             String imageName = uri.substring("/debug/image/".length());
             byte[] imageData = debugImages.get(imageName);
             if (imageData != null) {
-                return newFixedLengthResponse(Response.Status.OK, "image/png", imageData, imageData.length);
+                return newFixedLengthResponse(Response.Status.OK, "image/png", new ByteArrayInputStream(imageData), imageData.length);
             }
         }
         if ("/debug/list".equals(uri)) {
             String json = "[\"" + String.join("\",\"", debugImages.keySet()) + "\"]";
             return newFixedLengthResponse(Response.Status.OK, "application/json", json);
         }
-        if ("/api/schematic-data".equals(uri)) {
+        if ("/api/schematic-data".equals(session.getUri())) {
             return newFixedLengthResponse(Response.Status.OK, "application/json", latestSchematicJson);
         }
 
@@ -96,10 +99,12 @@ public class WebLogger extends NanoHTTPD {
     public static void warn(String text, Object... args) { log("W", text, args); }
     public static void err(String text, Object... args) { log("E", text, args); }
 
-    public static void logImage(String name, arc.graphics.Pixmap pixmap) {
+    public static void logImage(String name, Pixmap pixmap) {
         if (!ENABLE_WEB_LOGGER || pixmap == null) return;
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-            arc.graphics.g2d.PixmapIO.writePng(pixmap, baos);
+            PngWriter writer = new PngWriter(baos);
+            writer.write(pixmap);
+            writer.dispose();
             debugImages.put(name, baos.toByteArray());
             info("Logged debug image: %s", name);
         } catch (IOException e) {
