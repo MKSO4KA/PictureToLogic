@@ -8,6 +8,8 @@ import mindustry.ui.dialogs.BaseDialog;
 import mindustry.ui.Styles;
 import arc.scene.ui.TextField;
 import arc.scene.ui.layout.Table;
+import arc.scene.ui.ScrollPane;
+import arc.scene.ui.Label;
 
 public class ModUI {
 
@@ -17,13 +19,7 @@ public class ModUI {
     public static void build() {
         try {
             Table schematicsButtons = Vars.ui.schematics.buttons;
-
-            schematicsButtons.button("PictureToLogic", Icon.image, () -> {
-                showSettingsDialog();
-            }).size(180, 64).padLeft(6);
-
-            Log.info("PictureToLogic button added to schematics dialog.");
-
+            schematicsButtons.button("PictureToLogic", Icon.image, ModUI::showSettingsDialog).size(180, 64).padLeft(6);
         } catch (Exception e) {
             Log.err("Failed to build PictureToLogic UI!", e);
         }
@@ -42,55 +38,49 @@ public class ModUI {
         displaysYField.setValidator(text -> text.matches("[0-9]+") && Integer.parseInt(text) > 0);
         dialog.cont.add(displaysYField).width(100f).row();
 
-        dialog.cont.button("Выбрать изображение...", Icon.file, () -> {
+        dialog.cont.button("Выбрать и обработать...", Icon.file, () -> {
             Vars.platform.showFileChooser(true, "Выбор изображения", "png", file -> {
-                // ИЗМЕНЕНО: Убираем проверку file.exists()
-                // Если система вернула нам объект файла, мы доверяем ему.
                 if (file != null) {
-                    // Добавляем больше логов для отладки
-                    Log.info("File object received. Path: " + file.path());
-                    Log.info("Is readable: " + file.read()); // Проверим, можно ли его читать
-
-                    // Сразу пытаемся запустить генерацию.
-                    // Вся проверка будет внутри этого метода.
-                    generateSchematic(file);
-                    dialog.hide();
+                    dialog.hide(); // Сначала прячем окно настроек
+                    generateAndShowReport(file); // Затем запускаем обработку и показ отчета
                 } else {
-                    // Эта ветка сработает, если пользователь просто закрыл диалог, не выбрав файл.
                     Vars.ui.showInfo("Файл не выбран.");
                 }
             });
         }).padTop(20).colspan(2).growX();
 
-        dialog.buttons.defaults().size(150, 54);
-        dialog.buttons.button("Закрыть", Icon.cancel, dialog::hide);
-
+        dialog.buttons.button("Закрыть", Icon.cancel, dialog::hide).size(150, 54);
         dialog.show();
     }
 
-    private static void generateSchematic(Fi imageFile) {
-        // ИЗМЕНЕНО: Оборачиваем ВЕСЬ метод в try-catch
+    private static void generateAndShowReport(Fi imageFile) {
         try {
             int displaysX = Integer.parseInt(displaysXField.getText());
             int displaysY = Integer.parseInt(displaysYField.getText());
 
-            Log.info("Начинаем генерацию для файла " + imageFile.name());
-            Log.info("Размер сетки дисплеев: " + displaysX + "x" + displaysY);
+            LogicCore logic = new LogicCore();
+            String reportText = logic.processImage(imageFile, displaysX, displaysY);
 
-            // Настоящая проверка происходит здесь.
-            // Если файл нечитаемый, эта строка выбросит исключение.
-            byte[] imageBytes = imageFile.readBytes();
-
-            Log.info("Файл успешно прочитан, размер: " + imageBytes.length + " байт.");
-
-            // Здесь будет ваш код для обработки изображения
-            Vars.ui.showInfo("Файл успешно прочитан!");
+            // Показываем новое окно с результатами
+            showReportDialog(reportText);
 
         } catch (Exception e) {
-            // Если что-то пошло не так (файл не удалось прочитать),
-            // мы поймаем ошибку здесь и сообщим пользователю.
-            Log.err("Не удалось прочитать или обработать выбранный файл!", e);
-            Vars.ui.showException("Ошибка чтения файла", e);
+            Log.err("Ошибка при запуске LogicCore!", e);
+            Vars.ui.showException("Ошибка обработки", e);
         }
+    }
+
+    private static void showReportDialog(String reportText) {
+        BaseDialog reportDialog = new BaseDialog("Отчет об обработке");
+        
+        Label reportLabel = new Label(reportText);
+        reportLabel.setWrap(true); // Включаем перенос строк
+
+        ScrollPane scroll = new ScrollPane(reportLabel, Styles.defaultPane);
+        scroll.setFadeScrollBars(false);
+
+        reportDialog.cont.add(scroll).grow().width(600).height(400); // Задаем размеры окна
+        reportDialog.buttons.button("OK", Icon.ok, reportDialog::hide).size(120, 54);
+        reportDialog.show();
     }
 }
