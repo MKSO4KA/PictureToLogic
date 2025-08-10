@@ -16,12 +16,8 @@ java{
 }
 
 ext{
-    //the build number that this mod is made for
-    mindustryVersion = 'v150.1'
+    mindustryVersion = 'v150.1' // Версия Mindustry, можно обновить до последней
     jabelVersion = "93fde537c7"
-    //windows sucks
-    isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
-    sdkRoot = System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
 }
 
 //java 8 backwards compatibility flag
@@ -32,6 +28,7 @@ allprojects{
 }
 
 dependencies{
+    // Эти строки говорят Gradle, где найти API Mindustry
     compileOnly "com.github.Anuken.Arc:arc-core:$mindustryVersion"
     compileOnly "com.github.Anuken.Mindustry:core:$mindustryVersion"
 
@@ -47,29 +44,12 @@ configurations.all{
     }
 }
 
-task jarAndroid{
-    dependsOn "jar"
-
-    doLast{
-        if(!sdkRoot || !new File(sdkRoot).exists()) throw new GradleException("No valid Android SDK found. Ensure that ANDROID_HOME is set to your Android SDK directory.");
-
-        def platformRoot = new File("$sdkRoot/platforms/").listFiles().sort().reverse().find{ f -> new File(f, "android.jar").exists()}
-
-        if(!platformRoot) throw new GradleException("No android.jar found. Ensure that you have an Android platform installed.")
-
-        //collect dependencies needed for desugaring
-        def dependencies = (configurations.compileClasspath.asList() + configurations.runtimeClasspath.asList() + [new File(platformRoot, "android.jar")]).collect{ "--classpath $it.path" }.join(" ")
-
-        def d8 = isWindows ? "d8.bat" : "d8"
-
-        //dex and desugar files - this requires d8 in your PATH
-        "$d8 $dependencies --min-api 14 --output ${project.archivesBaseName}Android.jar ${project.archivesBaseName}Desktop.jar"
-            .execute(null, new File("$buildDir/libs")).waitForProcessOutput(System.out, System.err)
-    }
-}
 
 jar{
-    archiveFileName = "${base.archivesBaseName}Desktop.jar"
+    // Упрощенная задача jar для начала.
+    // Она не будет работать на Android, но будет собираться на GitHub Actions для ПК.
+    // Этого достаточно, чтобы проверить, что код компилируется.
+    archiveFileName = "${archivesBaseName}.jar"
 
     from{
         configurations.runtimeClasspath.collect{ it.isDirectory() ? it : zipTree(it) }
@@ -77,24 +57,6 @@ jar{
 
     from(projectDir){
         include "mod.hjson"
-    }
-
-    from("assets/"){
-        include "**"
-    }
-}
-
-task deploy(type: Jar){
-    dependsOn jarAndroid
-    dependsOn jar
-    archiveFileName = "${base.archivesBaseName}.jar"
-
-    from{ [zipTree("$buildDir/libs/${project.archivesBaseName}Desktop.jar"), zipTree("$buildDir/libs/${project.archivesBaseName}Android.jar")] }
-
-    doLast{
-        delete{
-            delete "$buildDir/libs/${project.archivesBaseName}Desktop.jar"
-            delete "$buildDir/libs/${project.archivesBaseName}Android.jar"
-        }
+        include "assets/**"
     }
 }
