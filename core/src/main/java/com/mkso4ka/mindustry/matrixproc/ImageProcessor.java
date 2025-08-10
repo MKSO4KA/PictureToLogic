@@ -155,10 +155,8 @@ public class ImageProcessor {
         Pixmap copy = new Pixmap(source.getWidth(), source.getHeight());
         copy.draw(source);
         
-        // ИСПРАВЛЕНО: Используем правильный метод drawRect с 5 аргументами
         for (List<Rect> rectList : rects.values()) {
             for (Rect rect : rectList) {
-                // Метод drawRect принимает цвет как int (RGBA8888)
                 copy.drawRect(rect.x, rect.y, rect.w, rect.h, Color.red.rgba());
             }
         }
