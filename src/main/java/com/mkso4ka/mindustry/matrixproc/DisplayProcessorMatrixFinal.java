@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Queue;
 import java.util.Set;
 
-// ВАШ АЛГОРИТМ РАЗМЕЩЕНИЯ
 class DisplayProcessorMatrixFinal {
 
     static class Cell {
@@ -60,30 +59,31 @@ class DisplayProcessorMatrixFinal {
             for (int j = start; j <= end; j++) {
                 int currentX = display.center.x + i;
                 int currentY = display.center.y + j;
-                if (currentX >= 0 && currentX < n && currentY >= 0 && currentY < m) {
-                    matrix[currentX][currentY].type = 2;
-                    matrix[currentX][currentY].ownerId = display.id;
+                if (currentX >= 0 && currentX < m && currentY >= 0 && currentY < n) { // ИСПРАВЛЕНО: Проверка границ m и n
+                    matrix[currentY][currentX].type = 2; // ИСПРАВЛЕНО: matrix[y][x]
+                    matrix[currentY][currentX].ownerId = display.id;
                 }
             }
         }
     }
 
-    // ВАШ ИДЕАЛЬНЫЙ АЛГОРИТМ
     public void placeProcessors() {
         Log.info("Этап 1: Максимальное заполнение (с радиусом процессора " + PROCESSOR_REACH + ")");
         Queue<Point2> queue = new LinkedList<>();
         Set<Point2> visited = new HashSet<>();
         List<Point2> genericProcessors = new ArrayList<>();
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < m; j++) {
-                if (matrix[i][j].type == 2) {
-                    for (int dx = -1; dx <= 1; dx++) {
-                        for (int dy = -1; dy <= 1; dy++) {
+        
+        // ИСПРАВЛЕНО: Правильный обход n (высота, y) и m (ширина, x)
+        for (int y = 0; y < n; y++) {
+            for (int x = 0; x < m; x++) {
+                if (matrix[y][x].type == 2) {
+                    for (int dy = -1; dy <= 1; dy++) {
+                        for (int dx = -1; dx <= 1; dx++) {
                             if (dx == 0 && dy == 0) continue;
-                            int nx = i + dx;
-                            int ny = j + dy;
+                            int nx = x + dx;
+                            int ny = y + dy;
                             Point2 neighbor = new Point2(nx, ny);
-                            if (nx >= 0 && nx < n && ny >= 0 && ny < m && matrix[nx][ny].type == 0 && !visited.contains(neighbor) && isWithinProcessorReachOfAnyDisplay(neighbor)) {
+                            if (nx >= 0 && nx < m && ny >= 0 && ny < n && matrix[ny][nx].type == 0 && !visited.contains(neighbor) && isWithinProcessorReachOfAnyDisplay(neighbor)) {
                                 queue.add(neighbor);
                                 visited.add(neighbor);
                             }
@@ -92,18 +92,19 @@ class DisplayProcessorMatrixFinal {
                 }
             }
         }
+        
         while (!queue.isEmpty()) {
             Point2 current = queue.poll();
-            matrix[current.x][current.y].type = 1;
-            matrix[current.x][current.y].ownerId = -2;
+            matrix[current.y][current.x].type = 1;
+            matrix[current.y][current.x].ownerId = -2;
             genericProcessors.add(current);
-            for (int dx = -1; dx <= 1; dx++) {
-                for (int dy = -1; dy <= 1; dy++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
                     if (dx == 0 && dy == 0) continue;
                     int nx = current.x + dx;
                     int ny = current.y + dy;
                     Point2 neighbor = new Point2(nx, ny);
-                    if (nx >= 0 && nx < n && ny >= 0 && ny < m && matrix[nx][ny].type == 0 && !visited.contains(neighbor) && isWithinProcessorReachOfAnyDisplay(neighbor)) {
+                    if (nx >= 0 && nx < m && ny >= 0 && ny < n && matrix[ny][nx].type == 0 && !visited.contains(neighbor) && isWithinProcessorReachOfAnyDisplay(neighbor)) {
                         queue.add(neighbor);
                         visited.add(neighbor);
                     }
@@ -117,19 +118,23 @@ class DisplayProcessorMatrixFinal {
             double minDistanceSq = Double.MAX_VALUE;
             for (DisplayInfo display : displays) {
                 if (display.getProcessorsNeeded() > 0) {
-                    double distSq = display.distanceSq(procPoint);
-                    if (distSq < minDistanceSq) {
+                    // --- ГЛАВНОЕ ИСПРАВЛЕНИЕ БАГА ---
+                    // Вместо display.distanceSq(procPoint) используем правильный метод,
+                    // который считает расстояние до КРАЯ прямоугольника.
+                    double distSq = distanceSqFromPointToRectangle(procPoint, display);
+                    
+                    if (distSq <= PROCESSOR_REACH_SQ && distSq < minDistanceSq) {
                         minDistanceSq = distSq;
                         bestOwner = display;
                     }
                 }
             }
             if (bestOwner != null) {
-                matrix[procPoint.x][procPoint.y].ownerId = bestOwner.id;
+                matrix[procPoint.y][procPoint.x].ownerId = bestOwner.id;
                 bestOwner.processorsPlaced++;
             } else {
-                matrix[procPoint.x][procPoint.y].type = 0;
-                matrix[procPoint.x][procPoint.y].ownerId = -1;
+                matrix[procPoint.y][procPoint.x].type = 0;
+                matrix[procPoint.y][procPoint.x].ownerId = -1;
             }
         }
     }
@@ -149,10 +154,13 @@ class DisplayProcessorMatrixFinal {
         int maxX = display.center.x + ((displaySize % 2 == 0) ? halfSize - 1 : halfSize);
         int minY = display.center.y - halfSize;
         int maxY = display.center.y + ((displaySize % 2 == 0) ? halfSize - 1 : halfSize);
+        
         double closestX = Math.max(minX, Math.min(p.x, maxX));
         double closestY = Math.max(minY, Math.min(p.y, maxY));
+        
         double dx = p.x - closestX;
         double dy = p.y - closestY;
+        
         return dx * dx + dy * dy;
     }
 }
