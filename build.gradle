@@ -13,14 +13,14 @@ java {
 }
 
 ext {
-    mindustryVersion = "v14" // Используйте актуальную версию Mindustry
+    mindustryVersion = "v147" // Используйте актуальную версию Mindustry
 }
 
 group = 'com.mkso4ka.mindustry.matrixproc'
 version = '1.0-SNAPSHOT'
 // Эта строка теперь является дополнением к toolchain. Оставляем ее.
 sourceCompatibility = 1.8 
-
+// help
 repositories {
     mavenCentral()
     // Репозиторий, где хранятся библиотеки Mindustry
