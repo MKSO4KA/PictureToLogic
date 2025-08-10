@@ -35,7 +35,6 @@ public class LogicCore {
             scaledMasterPixmap.draw(masterPixmap, 0, 0, masterPixmap.width, masterPixmap.height, 0, 0, totalWidth, totalHeight);
             masterPixmap.dispose();
 
-            // 1. Используем ВАШУ логику для создания blueprint
             DisplayMatrix displayMatrix = new DisplayMatrix();
             MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, DisplayProcessorMatrixFinal.PROCESSOR_REACH);
 
@@ -46,13 +45,12 @@ public class LogicCore {
                 for (int j = 0; j < displaysX; j++) {
                     int displayIndex = j * displaysY + i;
                     codeMap.put(displayIndex, new ArrayList<>());
-                    // ... (код анализа изображения остается без изменений)
                     int sliceWidth = displayPixelSize + (j > 0 ? BORDER_SIZE : 0) + (j < displaysX - 1 ? BORDER_SIZE : 0);
                     int sliceHeight = displayPixelSize + (i > 0 ? BORDER_SIZE : 0) + (i < displaysY - 1 ? BORDER_SIZE : 0);
                     int subX = j * (displayPixelSize + BORDER_SIZE * 2) - (j > 0 ? BORDER_SIZE : 0);
                     int subY = i * (displayPixelSize + BORDER_SIZE * 2) - (i > 0 ? BORDER_SIZE : 0);
                     Pixmap finalSlice = new Pixmap(sliceWidth, sliceHeight);
-                    finalSlice.draw(scaledMasterPixmap, 0, 0, subX, subY, sliceWidth, sliceHeight);
+                    finalSlice.draw(scaledMasterPixmap, subX, subY, sliceWidth, sliceHeight, 0, 0, sliceWidth, sliceHeight);
                     ImageProcessor processor = new ImageProcessor(finalSlice);
                     Map<Integer, List<Rect>> rects = processor.groupOptimal();
                     int offsetX = (j > 0) ? BORDER_SIZE : 0;
@@ -74,7 +72,6 @@ public class LogicCore {
             }
             scaledMasterPixmap.dispose();
 
-            // 2. Используем ВАШ алгоритм для размещения процессоров
             DisplayProcessorMatrixFinal matrixFinal = new DisplayProcessorMatrixFinal(
                 blueprint.n, blueprint.m, processorsPerDisplay, blueprint.displayCoordinates, displaySize
             );
@@ -82,7 +79,6 @@ public class LogicCore {
             DisplayProcessorMatrixFinal.Cell[][] finalMatrix = matrixFinal.getMatrix();
             DisplayInfo[] finalDisplays = matrixFinal.getDisplays();
 
-            // 3. Собираем чертеж, который будет точной копией вашей матрицы
             return buildSchematic(finalMatrix, finalDisplays, codeMap, displayBlock);
 
         } catch (Exception e) {
@@ -94,31 +90,31 @@ public class LogicCore {
     private Schematic buildSchematic(DisplayProcessorMatrixFinal.Cell[][] matrix, DisplayInfo[] displays, Map<Integer, List<String>> codeMap, Block displayBlock) {
         Seq<Stile> tiles = new Seq<>();
         
-        // --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ---
-        // Мы должны читать матрицу так же, как она была создана: matrix[x][y]
-        int width = matrix.length;
-        int height = matrix[0].length;
+        int height = matrix.length;
+        int width = matrix[0].length;
 
-        for (int x = 0; x < width; x++) { // Внешний цикл по X (столбцы)
-            for (int y = 0; y < height; y++) { // Внутренний цикл по Y (строки)
-                DisplayProcessorMatrixFinal.Cell cell = matrix[x][y];
+        for (int row = 0; row < height; row++) {
+            for (int col = 0; col < width; col++) {
+                DisplayProcessorMatrixFinal.Cell cell = matrix[row][col];
                 if (cell.type == 0) continue;
 
-                short schemX = (short)x;
-                short schemY = (short)y;
+                short schemX = (short)col;
+                short schemY = (short)row;
 
-                if (cell.type == 2) { // Это клетка дисплея
-                    // Мы больше не пытаемся "угадать" центр.
-                    // Дисплеи будут поставлены отдельным, гарантированным циклом.
-                    // Здесь мы ничего не делаем, чтобы избежать дубликатов.
-                } else if (cell.type == 1) { // Это процессор
-                    if (cell.ownerId >= 0) {
+                if (cell.type == 1) { // Это процессор
+                    // --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
+                    // Проверяем, что у процессора есть и владелец, и валидный индекс кода
+                    if (cell.ownerId >= 0 && cell.processorIndex >= 0) {
                         DisplayInfo ownerDisplay = displays[cell.ownerId];
                         
                         String code = "";
                         List<String> codesForDisplay = codeMap.get(cell.ownerId);
-                        if (codesForDisplay != null && !codesForDisplay.isEmpty()) {
-                            code = codesForDisplay.remove(0);
+                        
+                        // Берем код строго по индексу, который был присвоен при размещении
+                        if (codesForDisplay != null && cell.processorIndex < codesForDisplay.size()) {
+                            code = codesForDisplay.get(cell.processorIndex);
+                        } else {
+                            Log.warn("Процессор в (" + schemX + ", " + schemY + ") имеет неверный индекс кода: " + cell.processorIndex + " для дисплея " + cell.ownerId);
                         }
 
                         LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
@@ -133,8 +129,6 @@ public class LogicCore {
             }
         }
 
-        // ГАРАНТИРОВАННОЕ РАЗМЕЩЕНИЕ ДИСПЛЕЕВ
-        // Мы проходимся по исходному списку и ставим ровно столько дисплеев, сколько нужно.
         for (DisplayInfo display : displays) {
             tiles.add(new Stile(displayBlock, (short)display.center.x, (short)display.center.y, null, (byte) 0));
         }
@@ -144,7 +138,6 @@ public class LogicCore {
         return new Schematic(tiles, tags, width, height);
     }
     
-    // ... (остальные вспомогательные методы остаются без изменений) ...
     private List<String> generateCommandList(Map<Integer, List<Rect>> rects, int displayPixelSize, int offsetX, int offsetY) {
         List<String> commands = new ArrayList<>();
         for (Map.Entry<Integer, List<Rect>> entry : rects.entrySet()) {
@@ -154,7 +147,7 @@ public class LogicCore {
                 for (Rect rect : rectList) {
                     int correctedX = rect.x - offsetX;
                     int correctedY = rect.y - offsetY;
-                    int mindustryY = displayPixelSize - correctedY - rect.h;
+                    int mindustryY = displayPixelSize - 1 - correctedY - (rect.h - 1);
                     commands.add(String.format("draw rect %d %d %d %d 0 0", correctedX, mindustryY, rect.w, rect.h));
                 }
             }

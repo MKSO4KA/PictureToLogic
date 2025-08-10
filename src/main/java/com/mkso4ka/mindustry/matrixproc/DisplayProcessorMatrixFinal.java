@@ -2,9 +2,7 @@ package com.mkso4ka.mindustry.matrixproc;
 
 import arc.math.geom.Point2;
 import arc.util.Log;
-import java.util.ArrayList;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.Queue;
 
 class DisplayProcessorMatrixFinal {
@@ -23,6 +21,8 @@ class DisplayProcessorMatrixFinal {
     static class Cell {
         int type = 0;
         int ownerId = -1;
+        // НОВОЕ ПОЛЕ: Хранит порядковый номер процессора для его владельца (0, 1, 2...)
+        int processorIndex = -1;
     }
 
     public static final double PROCESSOR_REACH = 10.2;
@@ -71,18 +71,15 @@ class DisplayProcessorMatrixFinal {
         }
     }
 
-    // --- НОВЫЙ, ОПТИМИЗИРОВАННЫЙ АЛГОРИТМ РАЗМЕЩЕНИЯ ---
     public void placeProcessors() {
         // --- ЭТАП 1: Определяем всю разрешенную территорию для процессоров ---
-        Log.info("Этап 1: Определение территории для процессоров...");
         boolean[][] isAllowed = new boolean[n][m];
         boolean[][] visitedForTerritory = new boolean[n][m];
         Queue<Point2> territoryQueue = new LinkedList<>();
 
-        // Начальные точки для поиска территории
         for (int y = 0; y < n; y++) {
             for (int x = 0; x < m; x++) {
-                if (matrix[y][x].type == 2) { // Начинаем от всех клеток дисплеев
+                if (matrix[y][x].type == 2) {
                     for (int dy = -1; dy <= 1; dy++) {
                         for (int dx = -1; dx <= 1; dx++) {
                             if (dx == 0 && dy == 0) continue;
@@ -98,7 +95,6 @@ class DisplayProcessorMatrixFinal {
             }
         }
 
-        // Заливка для поиска всей территории
         while (!territoryQueue.isEmpty()) {
             Point2 current = territoryQueue.poll();
             isAllowed[current.y][current.x] = true;
@@ -114,14 +110,11 @@ class DisplayProcessorMatrixFinal {
                 }
             }
         }
-        Log.info("Территория определена.");
 
         // --- ЭТАП 2: Параллельная заливка (BFS) от каждого дисплея для компактного размещения ---
-        Log.info("Этап 2: Формирование компактных кластеров процессоров...");
         Queue<ProcessorCandidate> placementQueue = new LinkedList<>();
         boolean[][] visitedForPlacement = new boolean[n][m];
 
-        // Инициализируем очередь начальными точками от каждого дисплея
         for (DisplayInfo display : displays) {
             for (int y = 0; y < n; y++) {
                 for (int x = 0; x < m; x++) {
@@ -144,25 +137,25 @@ class DisplayProcessorMatrixFinal {
             }
         }
 
-        // Основной цикл "волнового" размещения
         while (!placementQueue.isEmpty()) {
             ProcessorCandidate candidate = placementQueue.poll();
             DisplayInfo owner = displays[candidate.ownerId];
 
-            // Если этому дисплею еще нужен процессор, отдаем ему эту клетку
             if (owner.getProcessorsNeeded() > 0) {
+                // --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
+                // Присваиваем процессору его порядковый номер, перед тем как увеличить счетчик.
+                matrix[candidate.location.y][candidate.location.x].processorIndex = owner.processorsPlaced;
+                
                 matrix[candidate.location.y][candidate.location.x].type = 1;
                 matrix[candidate.location.y][candidate.location.x].ownerId = owner.id;
                 owner.processorsPlaced++;
 
-                // И добавляем соседей этой клетки в очередь для дальнейшего "роста"
                 for (int dy = -1; dy <= 1; dy++) {
                     for (int dx = -1; dx <= 1; dx++) {
                         if (dx == 0 && dy == 0) continue;
                         int nx = candidate.location.x + dx;
                         int ny = candidate.location.y + dy;
                         if (nx >= 0 && nx < m && ny >= 0 && ny < n && isAllowed[ny][nx] && !visitedForPlacement[ny][nx]) {
-                            // Важно: новый кандидат должен быть в зоне досягаемости своего "родителя"
                             if (distanceSqFromPointToRectangle(new Point2(nx, ny), owner) <= PROCESSOR_REACH_SQ) {
                                 placementQueue.add(new ProcessorCandidate(new Point2(nx, ny), owner.id));
                                 visitedForPlacement[ny][nx] = true;
@@ -172,7 +165,6 @@ class DisplayProcessorMatrixFinal {
                 }
             }
         }
-        Log.info("Размещение завершено.");
     }
 
     private boolean isWithinProcessorReachOfAnyDisplay(Point2 p) {
