@@ -2,7 +2,18 @@ package com.mkso4ka.mindustry.matrixproc;
 
 import arc.files.Fi;
 import arc.graphics.Pixmap;
+import arc.struct.Seq;
+import arc.struct.StringMap;
 import arc.util.Log;
+import mindustry.game.Schematic;
+import mindustry.game.Schematic.Stile;
+import mindustry.gen.LogicIO;
+import mindustry.logic.LogicIO.LogicLink;
+import mindustry.world.Block;
+import mindustry.world.blocks.logic.LogicBlock;
+import mindustry.world.blocks.logic.MessageBlock;
+import mindustry.world.blocks.logic.LogicDisplay;
+import mindustry.content.Blocks;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -15,23 +26,18 @@ public class LogicCore {
 
     /**
      * Главный метод, который запускает всю цепочку обработки.
-     * @return Форматированная строка с результатами для вывода в диалоговом окне.
+     * @return Готовый объект Schematic или null в случае ошибки.
      */
-    public String processImage(Fi imageFile, int displaysX, int displaysY) {
-        StringBuilder report = new StringBuilder(); // Собираем отчет для пользователя
+    public Schematic processImage(Fi imageFile, int displaysX, int displaysY) {
         try {
-            report.append("[lime] --- НАЧАЛО ОБРАБОТКИ ---\n\n");
+            Log.info("--- НАЧАЛО ОБРАБОТКИ ---");
             int displaySize = 3;
+            Block displayBlock = Blocks.largeLogicDisplay; // Используем большой дисплей
 
+            // 1. Анализ изображения и расчет потребностей
             int displayPixelSize = getDisplayPixelSize(displaySize);
-            report.append("[accent]1. Параметры:[]\n")
-                  .append("  Видимая область: ").append(displayPixelSize).append("px\n")
-                  .append("  Внутренняя рамка: ").append(BORDER_SIZE).append("px\n\n");
-
             int totalWidth = (displaysX * displayPixelSize) + (Math.max(0, displaysX - 1) * BORDER_SIZE * 2);
             int totalHeight = (displaysY * displayPixelSize) + (Math.max(0, displaysY - 1) * BORDER_SIZE * 2);
-            report.append("[accent]2. Масштабирование:[]\n")
-                  .append("  Изображение будет приведено к ").append(totalWidth).append("x").append(totalHeight).append("px\n\n");
 
             Pixmap masterPixmap = new Pixmap(imageFile);
             Pixmap scaledMasterPixmap = new Pixmap(totalWidth, totalHeight);
@@ -40,11 +46,9 @@ public class LogicCore {
 
             DisplayMatrix displayMatrix = new DisplayMatrix();
             MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, DisplayProcessorMatrixFinal.PROCESSOR_REACH);
-            report.append("[accent]3. Создание чертежа:[]\n")
-                  .append("  Создан чертеж для ").append(blueprint.displayCoordinates.length).append(" дисплеев.\n\n");
 
-            report.append("[accent]4. Анализ фрагментов:[]\n");
             int[] processorsPerDisplay = new int[blueprint.displayCoordinates.length];
+            List<List<String>> allProcessorsCode = new ArrayList<>();
 
             for (int i = 0; i < displaysY; i++) {
                 for (int j = 0; j < displaysX; j++) {
@@ -67,31 +71,89 @@ public class LogicCore {
                     List<String> allCommands = generateCommandList(rects, displayPixelSize, offsetX, offsetY);
                     int commandCount = allCommands.size();
                     processorsPerDisplay[displayIndex] = (int) Math.ceil((double) commandCount / COMMANDS_PER_PROCESSOR);
-                    
-                    report.append("  [lightgray]Дисплей #").append(displayIndex).append(":[] ")
-                          .append(commandCount).append(" команд -> [orange]").append(processorsPerDisplay[displayIndex]).append("[] проц.\n");
 
+                    // Сохраняем код для каждого процессора
+                    for (int p = 0; p < processorsPerDisplay[displayIndex]; p++) {
+                        int start = p * COMMANDS_PER_PROCESSOR;
+                        int end = Math.min(start + COMMANDS_PER_PROCESSOR, commandCount);
+                        List<String> chunk = allCommands.subList(start, end);
+                        StringBuilder codeBuilder = new StringBuilder();
+                        chunk.forEach(command -> codeBuilder.append(command).append("\n"));
+                        codeBuilder.append("drawflush display1");
+                        allProcessorsCode.add(Arrays.asList(String.valueOf(displayIndex), codeBuilder.toString()));
+                    }
                     finalSlice.dispose();
                 }
             }
-            
             scaledMasterPixmap.dispose();
 
-            report.append("\n[accent]--- ИТОГ АНАЛИЗА ---[]\n");
-            report.append("Рассчитанные потребности: [yellow]").append(Arrays.toString(processorsPerDisplay)).append("[]\n\n");
+            // 2. Размещение блоков
+            DisplayProcessorMatrixFinal matrixFinal = new DisplayProcessorMatrixFinal(
+                blueprint.n, blueprint.m, processorsPerDisplay, blueprint.displayCoordinates, displaySize
+            );
+            matrixFinal.placeProcessors();
+            Cell[][] finalMatrix = matrixFinal.getMatrix();
+            DisplayInfo[] finalDisplays = matrixFinal.getDisplays();
 
-            // Здесь будет логика размещения процессоров и генерации чертежа
-
-            report.append("[lime] --- ОБРАБОТКА ЗАВЕРШЕНА УСПЕШНО --- []");
+            // 3. Создание объекта Schematic
+            return buildSchematic(finalMatrix, finalDisplays, allProcessorsCode, displayBlock);
 
         } catch (Exception e) {
             Log.err("Критическая ошибка в LogicCore!", e);
-            report.append("\n\n[scarlet]!!! ПРОИЗОШЛА КРИТИЧЕСКАЯ ОШИБКА !!![]\n\n")
-                  .append(e.toString());
+            return null; // Возвращаем null в случае ошибки
         }
-        return report.toString();
     }
 
+    private Schematic buildSchematic(Cell[][] matrix, DisplayInfo[] displays, List<List<String>> allProcessorsCode, Block displayBlock) {
+        Seq<Stile> tiles = new Seq<>();
+        int processorCodeIndex = 0;
+
+        for (int x = 0; x < matrix.length; x++) {
+            for (int y = 0; y < matrix[0].length; y++) {
+                Cell cell = matrix[x][y];
+                if (cell.type == 0) continue; // Пропускаем пустые клетки
+
+                if (cell.type == 2) { // Это дисплей
+                    // Находим центр группы дисплеев
+                    if (isCenterOfBlock(x, y, cell.ownerId, matrix, 3)) {
+                        tiles.add(new Stile(displayBlock, x, y, null, (byte) 0));
+                    }
+                } else if (cell.type == 1) { // Это процессор
+                    if (cell.ownerId >= 0) {
+                        DisplayInfo ownerDisplay = displays[cell.ownerId];
+                        
+                        // Ищем код для этого процессора
+                        String code = "";
+                        for(List<String> codeEntry : allProcessorsCode) {
+                            if(Integer.parseInt(codeEntry.get(0)) == cell.ownerId) {
+                                code = codeEntry.get(1);
+                                allProcessorsCode.remove(codeEntry); // Удаляем, чтобы не использовать повторно
+                                break;
+                            }
+                        }
+
+                        // Создаем линк к дисплею
+                        LogicLink[] links = {new LogicLink(ownerDisplay.center.x, ownerDisplay.center.y, "display1", true)};
+                        byte[] config = LogicIO.write(code, links);
+                        
+                        tiles.add(new Stile(Blocks.microProcessor, x, y, config, (byte) 0));
+                    }
+                }
+            }
+        }
+        
+        StringMap tags = new StringMap();
+        tags.put("name", "PictureToLogic-Schematic");
+        return new Schematic(tiles, tags, matrix.length, matrix[0].length);
+    }
+    
+    // Вспомогательный метод, чтобы ставить дисплей только один раз
+    private boolean isCenterOfBlock(int x, int y, int ownerId, Cell[][] matrix, int size) {
+        int offset = size / 2;
+        return matrix[x-offset][y-offset].ownerId == ownerId && matrix[x+offset][y+offset].ownerId == ownerId;
+    }
+
+    // Остальные вспомогательные методы без изменений
     private List<String> generateCommandList(Map<Integer, List<Rect>> rects, int displayPixelSize, int offsetX, int offsetY) {
         List<String> commands = new ArrayList<>();
         for (Map.Entry<Integer, List<Rect>> entry : rects.entrySet()) {

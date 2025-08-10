@@ -1,16 +1,19 @@
 package com.mkso4ka.mindustry.matrixproc;
 
-import java.awt.*;
-import java.awt.image.BufferedImage;
-import javax.imageio.ImageIO;
-import java.io.File;
-import java.io.IOException;
+import java.awt.Point;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
+import arc.util.Log; // Используем логирование из Arc
+
+// ВАЖНО: Добавляем внутренний класс для хранения информации о клетке
+class Cell {
+    int type = 0; // 0 = пусто, 1 = процессор, 2 = дисплей
+    int ownerId = -1; // ID дисплея, к которому привязан процессор/дисплей
+}
 
 class DisplayProcessorMatrixFinal {
     public static final double PROCESSOR_REACH = 10.2;
@@ -21,11 +24,6 @@ class DisplayProcessorMatrixFinal {
     private final Cell[][] matrix;
     private final DisplayInfo[] displays;
     private final int displaySize;
-
-    private static class Cell {
-        int type = 0;
-        int ownerId = -1;
-    }
 
     public DisplayProcessorMatrixFinal(int n, int m, int[] processorsPerDisplay, int[][] displayCenters, int displaySize) {
         this.n = n;
@@ -45,6 +43,15 @@ class DisplayProcessorMatrixFinal {
         }
     }
 
+    // --- ИЗМЕНЕНИЕ: Делаем метод публичным, чтобы его мог видеть LogicCore ---
+    public Cell[][] getMatrix() {
+        return this.matrix;
+    }
+    
+    public DisplayInfo[] getDisplays() {
+        return this.displays;
+    }
+
     private void placeSingleDisplay(DisplayInfo display, int displaySize) {
         int offset = displaySize / 2;
         int start = -offset;
@@ -62,7 +69,7 @@ class DisplayProcessorMatrixFinal {
     }
 
     public void placeProcessors() {
-        System.out.println("--- ЭТАП 1: Максимальное заполнение (с радиусом процессора " + PROCESSOR_REACH + ") ---");
+        Log.info("Этап 1: Максимальное заполнение...");
         Queue<Point> queue = new LinkedList<>();
         Set<Point> visited = new HashSet<>();
         List<Point> genericProcessors = new ArrayList<>();
@@ -102,8 +109,8 @@ class DisplayProcessorMatrixFinal {
                 }
             }
         }
-        System.out.println("Заполнение завершено. Найдено " + genericProcessors.size() + " возможных мест для процессоров.");
-        System.out.println("--- ЭТАП 2: Оптимальное распределение процессоров ---");
+        Log.info("Завершено. Найдено " + genericProcessors.size() + " мест.");
+        Log.info("Этап 2: Оптимальное распределение...");
         for (Point procPoint : genericProcessors) {
             DisplayInfo bestOwner = null;
             double minDistanceSq = Double.MAX_VALUE;
@@ -124,7 +131,6 @@ class DisplayProcessorMatrixFinal {
                 matrix[procPoint.x][procPoint.y].ownerId = -1;
             }
         }
-        printFinalStats();
     }
 
     private boolean isWithinProcessorReachOfAnyDisplay(Point p) {
@@ -147,77 +153,5 @@ class DisplayProcessorMatrixFinal {
         double dx = p.x - closestX;
         double dy = p.y - closestY;
         return dx * dx + dy * dy;
-    }
-
-    private void printFinalStats() {
-        System.out.println("--- Финальная статистика ---");
-        int totalRequired = 0;
-        int totalPlaced = 0;
-        for (DisplayInfo display : displays) {
-            totalRequired += display.totalProcessorsRequired;
-            totalPlaced += display.processorsPlaced;
-        }
-        System.out.println("--- ОБЩИЙ ИТОГ: Размещено " + totalPlaced + " из " + totalRequired + " требуемых процессоров. ---");
-        for (DisplayInfo display : displays) {
-             if (display.getProcessorsNeeded() > 0 && display.processorsPlaced < display.totalProcessorsRequired) {
-                System.out.println("Для дисплея " + display.id + " размещено " + display.processorsPlaced + " из " + display.totalProcessorsRequired + " (не хватило места).");
-            }
-        }
-    }
-
-    public void createImage(String filePath) {
-        final int CELL_SIZE = 10;
-        BufferedImage image = new BufferedImage(m * CELL_SIZE, n * CELL_SIZE, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g2d = image.createGraphics();
-        g2d.setColor(Color.WHITE);
-        g2d.fillRect(0, 0, m * CELL_SIZE, n * CELL_SIZE);
-        final float GOLDEN_RATIO_CONJUGATE = 0.61803398875f;
-        float currentHue = 0.1f;
-        Color[] displayColors = new Color[displays.length];
-        for (int i = 0; i < displays.length; i++) {
-            displayColors[i] = Color.getHSBColor(currentHue, 0.85f, 0.95f);
-            currentHue += GOLDEN_RATIO_CONJUGATE;
-            currentHue %= 1.0f;
-        }
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < m; j++) {
-                int cellType = matrix[i][j].type;
-                int displayId = matrix[i][j].ownerId;
-                Color fillColor = Color.LIGHT_GRAY;
-                if (displayId >= 0) {
-                    if (cellType == 1) {
-                        fillColor = displayColors[displayId];
-                    } else if (cellType == 2) {
-                        fillColor = displayColors[displayId].darker().darker();
-                    }
-                }
-                g2d.setColor(fillColor);
-                g2d.fillRect(j * CELL_SIZE, i * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-                g2d.setColor(Color.WHITE);
-                g2d.setStroke(new BasicStroke(1));
-                g2d.drawRect(j * CELL_SIZE, i * CELL_SIZE, CELL_SIZE, CELL_SIZE);
-            }
-        }
-        g2d.setColor(Color.BLACK);
-        g2d.setStroke(new BasicStroke(2));
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < m; j++) {
-                if (matrix[i][j].type == 2) {
-                    int myDisplayId = matrix[i][j].ownerId;
-                    if (i == 0 || matrix[i - 1][j].ownerId != myDisplayId || matrix[i - 1][j].type != 2) g2d.drawLine(j * CELL_SIZE, i * CELL_SIZE, (j + 1) * CELL_SIZE, i * CELL_SIZE);
-                    if (i == n - 1 || matrix[i + 1][j].ownerId != myDisplayId || matrix[i + 1][j].type != 2) g2d.drawLine(j * CELL_SIZE, (i + 1) * CELL_SIZE, (j + 1) * CELL_SIZE, (i + 1) * CELL_SIZE);
-                    if (j == 0 || matrix[i][j - 1].ownerId != myDisplayId || matrix[i][j - 1].type != 2) g2d.drawLine(j * CELL_SIZE, i * CELL_SIZE, j * CELL_SIZE, (i + 1) * CELL_SIZE);
-                    if (j == m - 1 || matrix[i][j + 1].ownerId != myDisplayId || matrix[i][j + 1].type != 2) g2d.drawLine((j + 1) * CELL_SIZE, i * CELL_SIZE, (j + 1) * CELL_SIZE, (i + 1) * CELL_SIZE);
-                }
-            }
-        }
-        g2d.dispose();
-        try {
-            ImageIO.write(image, "png", new File(filePath));
-            System.out.println("Изображение успешно сохранено в " + filePath);
-        } catch (IOException e) {
-            System.err.println("Ошибка при сохранении изображения: " + e.getMessage());
-            e.printStackTrace();
-        }
     }
 }

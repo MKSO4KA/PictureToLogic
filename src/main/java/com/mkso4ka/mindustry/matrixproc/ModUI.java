@@ -3,13 +3,12 @@ package com.mkso4ka.mindustry.matrixproc;
 import arc.files.Fi;
 import arc.util.Log;
 import mindustry.Vars;
+import mindustry.game.Schematic;
 import mindustry.gen.Icon;
 import mindustry.ui.dialogs.BaseDialog;
 import mindustry.ui.Styles;
 import arc.scene.ui.TextField;
 import arc.scene.ui.layout.Table;
-import arc.scene.ui.ScrollPane;
-import arc.scene.ui.Label;
 
 public class ModUI {
 
@@ -38,11 +37,11 @@ public class ModUI {
         displaysYField.setValidator(text -> text.matches("[0-9]+") && Integer.parseInt(text) > 0);
         dialog.cont.add(displaysYField).width(100f).row();
 
-        dialog.cont.button("Выбрать и обработать...", Icon.file, () -> {
+        dialog.cont.button("Выбрать и создать чертеж", Icon.file, () -> {
             Vars.platform.showFileChooser(true, "Выбор изображения", "png", file -> {
                 if (file != null) {
-                    dialog.hide(); // Сначала прячем окно настроек
-                    generateAndShowReport(file); // Затем запускаем обработку и показ отчета
+                    dialog.hide();
+                    generateAndShowSchematic(file);
                 } else {
                     Vars.ui.showInfo("Файл не выбран.");
                 }
@@ -53,34 +52,34 @@ public class ModUI {
         dialog.show();
     }
 
-    private static void generateAndShowReport(Fi imageFile) {
-        try {
-            int displaysX = Integer.parseInt(displaysXField.getText());
-            int displaysY = Integer.parseInt(displaysYField.getText());
+    private static void generateAndShowSchematic(Fi imageFile) {
+        // Показываем индикатор загрузки
+        Vars.ui.loadfrag.show("Обработка изображения...");
 
-            LogicCore logic = new LogicCore();
-            String reportText = logic.processImage(imageFile, displaysX, displaysY);
+        // Запускаем обработку в отдельном потоке, чтобы не "морозить" игру
+        new Thread(() -> {
+            try {
+                int displaysX = Integer.parseInt(displaysXField.getText());
+                int displaysY = Integer.parseInt(displaysYField.getText());
 
-            // Показываем новое окно с результатами
-            showReportDialog(reportText);
+                LogicCore logic = new LogicCore();
+                Schematic schematic = logic.processImage(imageFile, displaysX, displaysY);
+                
+                // Прячем индикатор загрузки
+                Vars.ui.loadfrag.hide();
 
-        } catch (Exception e) {
-            Log.err("Ошибка при запуске LogicCore!", e);
-            Vars.ui.showException("Ошибка обработки", e);
-        }
-    }
+                // Если все прошло успешно, показываем чертеж
+                if (schematic != null) {
+                    Vars.ui.schematics.show(schematic);
+                } else {
+                    Vars.ui.showInfo("[scarlet]Не удалось создать чертеж. Проверьте логи.[]");
+                }
 
-    private static void showReportDialog(String reportText) {
-        BaseDialog reportDialog = new BaseDialog("Отчет об обработке");
-        
-        Label reportLabel = new Label(reportText);
-        reportLabel.setWrap(true); // Включаем перенос строк
-
-        ScrollPane scroll = new ScrollPane(reportLabel, Styles.defaultPane);
-        scroll.setFadeScrollBars(false);
-
-        reportDialog.cont.add(scroll).grow().width(600).height(400); // Задаем размеры окна
-        reportDialog.buttons.button("OK", Icon.ok, reportDialog::hide).size(120, 54);
-        reportDialog.show();
+            } catch (Exception e) {
+                Vars.ui.loadfrag.hide();
+                Log.err("Критическая ошибка при создании чертежа!", e);
+                Vars.ui.showException("Ошибка", e);
+            }
+        }).start();
     }
 }
