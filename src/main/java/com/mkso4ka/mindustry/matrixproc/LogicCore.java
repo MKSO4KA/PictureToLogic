@@ -9,9 +9,10 @@ import mindustry.content.Blocks;
 import mindustry.game.Schematic;
 import mindustry.game.Schematic.Stile;
 import mindustry.world.Block;
-import mindustry.world.Tile; // ИМПОРТИРУЕМ TILE
+import mindustry.world.Tile;
 import mindustry.world.blocks.logic.LogicBlock;
 import mindustry.world.blocks.logic.LogicBlock.LogicLink;
+import mindustry.world.blocks.logic.LogicDisplay; // Импортируем
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -22,11 +23,11 @@ public class LogicCore {
     private static final int COMMANDS_PER_PROCESSOR = 989;
     private static final int BORDER_SIZE = 8;
 
-    public Schematic processImage(Fi imageFile, int displaysX, int displaysY) {
+    // ОБНОВЛЕНО: Метод теперь принимает тип дисплея
+    public Schematic processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock) {
         try {
             Log.info("--- НАЧАЛО ОБРАБОТКИ ---");
-            int displaySize = 3;
-            Block displayBlock = Blocks.largeLogicDisplay;
+            int displaySize = displayBlock.size; // Берем размер из выбранного блока
 
             int displayPixelSize = getDisplayPixelSize(displaySize);
             int totalWidth = (displaysX * displayPixelSize) + (Math.max(0, displaysX - 1) * BORDER_SIZE * 2);
@@ -98,14 +99,23 @@ public class LogicCore {
     private Schematic buildSchematic(DisplayProcessorMatrixFinal.Cell[][] matrix, DisplayInfo[] displays, Map<Integer, List<String>> codeMap, Block displayBlock) {
         Seq<Stile> tiles = new Seq<>();
         
-        for (int x = 0; x < matrix.length; x++) {
-            for (int y = 0; y < matrix[0].length; y++) {
-                DisplayProcessorMatrixFinal.Cell cell = matrix[x][y];
+        int rows = matrix.length;
+        int cols = matrix[0].length;
+
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < cols; col++) {
+                DisplayProcessorMatrixFinal.Cell cell = matrix[row][col];
                 if (cell.type == 0) continue;
 
+                // --- КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Меняем местами row и col ---
+                // Координата X в схематике - это столбец (col).
+                // Координата Y в схематике - это строка (row).
+                short schemX = (short)col;
+                short schemY = (short)row;
+
                 if (cell.type == 2) {
-                    if (isCenterOfBlock(x, y, cell.ownerId, matrix, 3)) {
-                        tiles.add(new Stile(displayBlock, (short)x, (short)y, null, (byte) 0));
+                    if (isCenterOfBlock(row, col, cell.ownerId, matrix, displayBlock.size)) {
+                        tiles.add(new Stile(displayBlock, schemX, schemY, null, (byte) 0));
                     }
                 } else if (cell.type == 1) {
                     if (cell.ownerId >= 0) {
@@ -118,16 +128,13 @@ public class LogicCore {
                         }
 
                         LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
+                        build.tile = new Tile(schemX, schemY);
                         
-                        // --- ВОТ ОНО, КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ---
-                        // Мы должны "привязать" нашу виртуальную постройку к фиктивному тайлу.
-                        build.tile = new Tile(x, y);
-                        // -----------------------------------------
-
-                        build.links.add(new LogicLink(ownerDisplay.center.x, ownerDisplay.center.y, "display1", true));
+                        // Координаты для линка тоже должны быть (col, row)
+                        build.links.add(new LogicLink(ownerDisplay.center.y, ownerDisplay.center.x, "display1", true));
                         build.updateCode(code);
                         
-                        tiles.add(new Stile(Blocks.microProcessor, (short)x, (short)y, build.config(), (byte) 0));
+                        tiles.add(new Stile(Blocks.microProcessor, schemX, schemY, build.config(), (byte) 0));
                     }
                 }
             }
@@ -135,15 +142,17 @@ public class LogicCore {
         
         StringMap tags = new StringMap();
         tags.put("name", "PictureToLogic-Schematic");
-        return new Schematic(tiles, tags, matrix.length, matrix[0].length);
+        return new Schematic(tiles, tags, cols, rows); // Ширина - это cols, высота - это rows
     }
     
-    private boolean isCenterOfBlock(int x, int y, int ownerId, DisplayProcessorMatrixFinal.Cell[][] matrix, int size) {
+    private boolean isCenterOfBlock(int row, int col, int ownerId, DisplayProcessorMatrixFinal.Cell[][] matrix, int size) {
         int offset = size / 2;
-        if (x - offset < 0 || y - offset < 0 || x + offset >= matrix.length || y + offset >= matrix[0].length) return false;
-        return matrix[x-offset][y-offset].ownerId == ownerId && matrix[x+offset][y+offset].ownerId == ownerId;
+        if (row - offset < 0 || col - offset < 0 || row + offset >= matrix.length || col + offset >= matrix[0].length) return false;
+        // Проверяем углы блока, чтобы убедиться, что это центр
+        return matrix[row-offset][col-offset].ownerId == ownerId && matrix[row+offset][col+offset].ownerId == ownerId;
     }
 
+    // ... (остальные вспомогательные методы остаются без изменений) ...
     private List<String> generateCommandList(Map<Integer, List<Rect>> rects, int displayPixelSize, int offsetX, int offsetY) {
         List<String> commands = new ArrayList<>();
         for (Map.Entry<Integer, List<Rect>> entry : rects.entrySet()) {
@@ -162,7 +171,8 @@ public class LogicCore {
     }
 
     private int getDisplayPixelSize(int displayBlockSize) {
-        return (displayBlockSize == 3) ? 80 : 176;
+        if (displayBlockSize >= 6) return 176; // Большой дисплей
+        return 80; // Маленький дисплей
     }
 
     private String formatColorCommand(int rgba8888) {

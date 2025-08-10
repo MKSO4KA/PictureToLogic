@@ -2,19 +2,27 @@ package com.mkso4ka.mindustry.matrixproc;
 
 import arc.Core;
 import arc.files.Fi;
+import arc.scene.ui.Label;
+import arc.scene.ui.ScrollPane;
+import arc.scene.ui.TextField;
+import arc.scene.ui.layout.Table;
+import arc.struct.Seq;
 import arc.util.Log;
 import mindustry.Vars;
 import mindustry.game.Schematic;
 import mindustry.gen.Icon;
-import mindustry.ui.dialogs.BaseDialog;
 import mindustry.ui.Styles;
-import arc.scene.ui.TextField;
-import arc.scene.ui.layout.Table;
+import mindustry.ui.dialogs.BaseDialog;
+import mindustry.world.blocks.ItemSelection;
+import mindustry.world.blocks.logic.LogicDisplay;
+import mindustry.content.Blocks; // Импортируем для дисплея по умолчанию
 
 public class ModUI {
 
     private static TextField displaysXField;
     private static TextField displaysYField;
+    // НОВАЯ ПЕРЕМЕННАЯ: Хранит выбранный пользователем дисплей
+    private static LogicDisplay selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay;
 
     public static void build() {
         try {
@@ -28,17 +36,36 @@ public class ModUI {
     private static void showSettingsDialog() {
         BaseDialog dialog = new BaseDialog("Настройки PictureToLogic");
 
-        dialog.cont.add("Дисплеев по X:").padRight(10);
+        // --- НАЧАЛО ИЗМЕНЕНИЙ ---
+
+        Table content = dialog.cont;
+        content.defaults().pad(4);
+
+        // Поля для ввода размеров сетки
+        content.add("Дисплеев по X:").padRight(10);
         displaysXField = new TextField("1");
         displaysXField.setValidator(text -> text.matches("[0-9]+") && Integer.parseInt(text) > 0);
-        dialog.cont.add(displaysXField).width(100f).row();
+        content.add(displaysXField).width(100f).row();
 
-        dialog.cont.add("Дисплеев по Y:").padRight(10);
+        content.add("Дисплеев по Y:").padRight(10);
         displaysYField = new TextField("1");
         displaysYField.setValidator(text -> text.matches("[0-9]+") && Integer.parseInt(text) > 0);
-        dialog.cont.add(displaysYField).width(100f).row();
+        content.add(displaysYField).width(100f).row();
 
-        dialog.cont.button("Выбрать и создать чертеж", Icon.file, () -> {
+        // НОВЫЙ ЭЛЕМЕНТ: Выбор типа дисплея
+        content.add("Тип дисплея:").colspan(2).left().row();
+        Table displaySelector = new Table();
+        // Получаем все доступные в игре логические дисплеи
+        Seq<LogicDisplay> displays = Vars.content.blocks().select(b -> b instanceof LogicDisplay).as();
+        // Создаем стандартный для Mindustry селектор блоков
+        ItemSelection.buildTable(displaySelector, displays, () -> selectedDisplay, d -> {
+            selectedDisplay = d; // Обновляем выбранный дисплей
+        });
+        content.add(displaySelector).colspan(2).left().row();
+
+        // --- КОНЕЦ ИЗМЕНЕНИЙ ---
+
+        content.button("Выбрать и создать чертеж", Icon.file, () -> {
             Vars.platform.showFileChooser(true, "Выбор изображения", "png", file -> {
                 if (file != null) {
                     dialog.hide();
@@ -63,13 +90,13 @@ public class ModUI {
                 int displaysY = Integer.parseInt(displaysYField.getText());
 
                 LogicCore logic = new LogicCore();
-                schematic = logic.processImage(imageFile, displaysX, displaysY);
+                // ОБНОВЛЕНО: Передаем выбранный дисплей в ядро логики
+                schematic = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay);
             } catch (Exception e) {
                 Log.err("Критическая ошибка при создании чертежа!", e);
             } finally {
                 Vars.ui.loadfrag.hide();
                 
-                // ИЗМЕНЕНИЕ: Этот код теперь выполняется в основном потоке игры
                 Schematic finalSchematic = schematic;
                 Core.app.post(() -> {
                     if (finalSchematic != null) {
