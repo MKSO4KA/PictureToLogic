@@ -13,7 +13,7 @@ java {
 }
 
 ext {
-    mindustryVersion = "v150" // Используйте актуальную версию Mindustry
+    mindustryVersion = "v14" // Используйте актуальную версию Mindustry
 }
 
 group = 'com.mkso4ka.mindustry.matrixproc'
