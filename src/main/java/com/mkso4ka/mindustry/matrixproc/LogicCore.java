@@ -5,16 +5,14 @@ import arc.graphics.Pixmap;
 import arc.struct.Seq;
 import arc.struct.StringMap;
 import arc.util.Log;
+import mindustry.content.Blocks;
 import mindustry.game.Schematic;
 import mindustry.game.Schematic.Stile;
 import mindustry.world.Block;
 import mindustry.world.blocks.logic.LogicBlock;
-import mindustry.world.blocks.logic.LogicBlock.LogicLink; // ИЗМЕНЕН ИМПОРТ
-import mindustry.world.blocks.logic.MessageBlock;
-import mindustry.world.blocks.logic.LogicDisplay;
-import mindustry.content.Blocks;
+import mindustry.world.blocks.logic.LogicBlock.LogicLink;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -42,11 +40,14 @@ public class LogicCore {
             MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, DisplayProcessorMatrixFinal.PROCESSOR_REACH);
 
             int[] processorsPerDisplay = new int[blueprint.displayCoordinates.length];
-            List<List<String>> allProcessorsCode = new ArrayList<>();
+            // ИЗМЕНЕНИЕ: Используем Map для хранения кода. Это решает проблему с вылетом.
+            Map<Integer, List<String>> codeMap = new HashMap<>();
 
             for (int i = 0; i < displaysY; i++) {
                 for (int j = 0; j < displaysX; j++) {
                     int displayIndex = j * displaysY + i;
+                    codeMap.put(displayIndex, new ArrayList<>());
+
                     int sliceWidth = displayPixelSize + (j > 0 ? BORDER_SIZE : 0) + (j < displaysX - 1 ? BORDER_SIZE : 0);
                     int sliceHeight = displayPixelSize + (i > 0 ? BORDER_SIZE : 0) + (i < displaysY - 1 ? BORDER_SIZE : 0);
                     int subX = j * (displayPixelSize + BORDER_SIZE * 2) - (j > 0 ? BORDER_SIZE : 0);
@@ -72,7 +73,7 @@ public class LogicCore {
                         StringBuilder codeBuilder = new StringBuilder();
                         chunk.forEach(command -> codeBuilder.append(command).append("\n"));
                         codeBuilder.append("drawflush display1");
-                        allProcessorsCode.add(Arrays.asList(String.valueOf(displayIndex), codeBuilder.toString()));
+                        codeMap.get(displayIndex).add(codeBuilder.toString());
                     }
                     finalSlice.dispose();
                 }
@@ -83,10 +84,10 @@ public class LogicCore {
                 blueprint.n, blueprint.m, processorsPerDisplay, blueprint.displayCoordinates, displaySize
             );
             matrixFinal.placeProcessors();
-            Cell[][] finalMatrix = matrixFinal.getMatrix();
+            DisplayProcessorMatrixFinal.Cell[][] finalMatrix = matrixFinal.getMatrix();
             DisplayInfo[] finalDisplays = matrixFinal.getDisplays();
 
-            return buildSchematic(finalMatrix, finalDisplays, allProcessorsCode, displayBlock);
+            return buildSchematic(finalMatrix, finalDisplays, codeMap, displayBlock);
 
         } catch (Exception e) {
             Log.err("Критическая ошибка в LogicCore!", e);
@@ -94,12 +95,12 @@ public class LogicCore {
         }
     }
 
-    private Schematic buildSchematic(Cell[][] matrix, DisplayInfo[] displays, List<List<String>> allProcessorsCode, Block displayBlock) {
+    private Schematic buildSchematic(DisplayProcessorMatrixFinal.Cell[][] matrix, DisplayInfo[] displays, Map<Integer, List<String>> codeMap, Block displayBlock) {
         Seq<Stile> tiles = new Seq<>();
         
         for (int x = 0; x < matrix.length; x++) {
             for (int y = 0; y < matrix[0].length; y++) {
-                Cell cell = matrix[x][y];
+                DisplayProcessorMatrixFinal.Cell cell = matrix[x][y];
                 if (cell.type == 0) continue;
 
                 if (cell.type == 2) {
@@ -110,18 +111,15 @@ public class LogicCore {
                     if (cell.ownerId >= 0) {
                         DisplayInfo ownerDisplay = displays[cell.ownerId];
                         
+                        // ИЗМЕНЕНИЕ: Безопасно берем код из Map
                         String code = "";
-                        for(List<String> codeEntry : allProcessorsCode) {
-                            if(Integer.parseInt(codeEntry.get(0)) == cell.ownerId) {
-                                code = codeEntry.get(1);
-                                allProcessorsCode.remove(codeEntry);
-                                break;
-                            }
+                        List<String> codesForDisplay = codeMap.get(cell.ownerId);
+                        if (codesForDisplay != null && !codesForDisplay.isEmpty()) {
+                            code = codesForDisplay.remove(0); // Взять и удалить первый доступный код
                         }
 
-                        // --- ИЗМЕНЕН СПОСОБ СОЗДАНИЯ КОНФИГУРАЦИИ ---
                         LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
-                        build.links.add(new LogicBlock.LogicLink(ownerDisplay.center.x, ownerDisplay.center.y, "display1", true));
+                        build.links.add(new LogicLink(ownerDisplay.center.x, ownerDisplay.center.y, "display1", true));
                         build.updateCode(code);
                         
                         tiles.add(new Stile(Blocks.microProcessor, (short)x, (short)y, build.config(), (byte) 0));
@@ -135,7 +133,7 @@ public class LogicCore {
         return new Schematic(tiles, tags, matrix.length, matrix[0].length);
     }
     
-    private boolean isCenterOfBlock(int x, int y, int ownerId, Cell[][] matrix, int size) {
+    private boolean isCenterOfBlock(int x, int y, int ownerId, DisplayProcessorMatrixFinal.Cell[][] matrix, int size) {
         int offset = size / 2;
         if (x - offset < 0 || y - offset < 0 || x + offset >= matrix.length || y + offset >= matrix[0].length) return false;
         return matrix[x-offset][y-offset].ownerId == ownerId && matrix[x+offset][y+offset].ownerId == ownerId;

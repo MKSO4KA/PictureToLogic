@@ -7,15 +7,16 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
-import arc.util.Log; // Используем логирование из Arc
-
-// ВАЖНО: Добавляем внутренний класс для хранения информации о клетке
-class Cell {
-    int type = 0; // 0 = пусто, 1 = процессор, 2 = дисплей
-    int ownerId = -1; // ID дисплея, к которому привязан процессор/дисплей
-}
+import arc.util.Log;
 
 class DisplayProcessorMatrixFinal {
+
+    // Внутренний класс для хранения информации о каждой клетке матрицы
+    static class Cell {
+        int type = 0; // 0 = пусто, 1 = процессор, 2 = дисплей
+        int ownerId = -1; // ID дисплея, к которому привязан
+    }
+
     public static final double PROCESSOR_REACH = 10.2;
     private static final double PROCESSOR_REACH_SQ = PROCESSOR_REACH * PROCESSOR_REACH;
 
@@ -43,7 +44,6 @@ class DisplayProcessorMatrixFinal {
         }
     }
 
-    // --- ИЗМЕНЕНИЕ: Делаем метод публичным, чтобы его мог видеть LogicCore ---
     public Cell[][] getMatrix() {
         return this.matrix;
     }

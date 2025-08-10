@@ -1,5 +1,6 @@
 package com.mkso4ka.mindustry.matrixproc;
 
+import arc.Core;
 import arc.files.Fi;
 import arc.util.Log;
 import mindustry.Vars;
@@ -56,27 +57,28 @@ public class ModUI {
         Vars.ui.loadfrag.show("Обработка изображения...");
 
         new Thread(() -> {
+            Schematic schematic = null;
             try {
                 int displaysX = Integer.parseInt(displaysXField.getText());
                 int displaysY = Integer.parseInt(displaysYField.getText());
 
                 LogicCore logic = new LogicCore();
-                Schematic schematic = logic.processImage(imageFile, displaysX, displaysY);
-                
-                Vars.ui.loadfrag.hide();
-
-                if (schematic != null) {
-                    // ИЗМЕНЕН СПОСОБ ПОКАЗА ЧЕРТЕЖА
-                    Vars.ui.schematics.hide(); // Сначала прячем диалог со списком
-                    Vars.control.input.useSchematic(schematic); // Затем сразу активируем чертеж
-                } else {
-                    Vars.ui.showInfo("[scarlet]Не удалось создать чертеж. Проверьте логи.[]");
-                }
-
+                schematic = logic.processImage(imageFile, displaysX, displaysY);
             } catch (Exception e) {
-                Vars.ui.loadfrag.hide();
                 Log.err("Критическая ошибка при создании чертежа!", e);
-                Vars.ui.showException("Ошибка", e);
+            } finally {
+                Vars.ui.loadfrag.hide();
+                
+                // ИЗМЕНЕНИЕ: Этот код теперь выполняется в основном потоке игры
+                Schematic finalSchematic = schematic;
+                Core.app.post(() -> {
+                    if (finalSchematic != null) {
+                        Vars.ui.schematics.hide();
+                        Vars.control.input.useSchematic(finalSchematic);
+                    } else {
+                        Vars.ui.showInfo("[scarlet]Не удалось создать чертеж. Проверьте логи.[]");
+                    }
+                });
             }
         }).start();
     }
