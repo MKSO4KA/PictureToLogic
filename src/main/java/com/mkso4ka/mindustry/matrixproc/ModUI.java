@@ -3,6 +3,7 @@ package com.mkso4ka.mindustry.matrixproc;
 import arc.Core;
 import arc.files.Fi;
 import arc.scene.ui.*;
+import arc.scene.ui.layout.Cell;
 import arc.scene.ui.layout.Table;
 import arc.util.Log;
 import mindustry.Vars;
@@ -25,11 +26,15 @@ public class ModUI {
     public static void build() {
         try {
             Table schematicsButtons = Vars.ui.schematics.buttons;
-            // Оборачиваем главную кнопку
-            WebLogger.logClick(
-                schematicsButtons.button("PictureToLogic", Icon.image, ModUI::showSettingsDialog),
-                "Open Settings"
-            ).size(180, 64).padLeft(6);
+
+            // --- ИСПРАВЛЕНИЕ ОШИБКИ 1 ---
+            // Сначала создаем кнопку через хелпер и получаем ее ячейку (Cell).
+            Cell<TextButton> buttonCell = schematicsButtons.button("PictureToLogic", Icon.image, ModUI::showSettingsDialog);
+            // Затем из ячейки достаем саму кнопку (.get()) и передаем ее в логгер.
+            WebLogger.logClick(buttonCell.get(), "Open Settings");
+            // Настраиваем саму ячейку.
+            buttonCell.size(180, 64).padLeft(6);
+
         } catch (Exception e) {
             WebLogger.err("Failed to build PictureToLogic UI!", e);
         }
@@ -46,7 +51,6 @@ public class ModUI {
         Table sliders = new Table();
         sliders.defaults().pad(2);
 
-        // Оборачиваем слайдеры
         xSlider = WebLogger.logChange(new Slider(1, 10, 1, false), "Displays X");
         ySlider = WebLogger.logChange(new Slider(1, 10, 1, false), "Displays Y");
         xLabel = new Label("1");
@@ -73,7 +77,6 @@ public class ModUI {
         ButtonGroup<TextButton> group = new ButtonGroup<>();
         group.setMinCheckCount(1);
 
-        // Оборачиваем кнопки выбора дисплея
         TextButton logicDisplayButton = WebLogger.logClick(
             new TextButton("Логический дисплей (3x3)", Styles.togglet),
             "Select Logic Display (3x3)"
@@ -98,23 +101,23 @@ public class ModUI {
         displaySelector.add(largeLogicDisplayButton).size(240, 60).padLeft(10);
         content.add(displaySelector).row();
 
-        // Оборачиваем галочку
         CheckBox debugCheckBox = new CheckBox("Показывать отладочное окно");
         debugCheckBox.setChecked(showDebug);
         debugCheckBox.changed(() -> showDebug = debugCheckBox.isChecked());
         content.add(WebLogger.logToggle(debugCheckBox, "Show Debug Window")).left().padTop(20).row();
 
-        // Оборачиваем кнопку выбора файла
-        TextButton selectFileButton = new TextButton("Выбрать и создать чертеж", Icon.file);
-        selectFileButton.clicked(() -> {
-            WebLogger.logFileChooser(file -> {
-                if (file != null) {
-                    dialog.hide();
-                    generateAndShowSchematic(file);
-                }
-            });
+        // --- ИСПРАВЛЕНИЕ ОШИБКИ 2 ---
+        // Используем тот же подход: создаем кнопку через хелпер `content.button`, который правильно работает с иконками.
+        Runnable fileChooserAction = () -> WebLogger.logFileChooser(file -> {
+            if (file != null) {
+                dialog.hide();
+                generateAndShowSchematic(file);
+            }
         });
-        content.add(WebLogger.logClick(selectFileButton, "Select Image and Create")).padTop(20).growX().height(60);
+        Cell<TextButton> selectFileCell = content.button("Выбрать и создать чертеж", Icon.file, fileChooserAction);
+        WebLogger.logClick(selectFileCell.get(), "Select Image and Create");
+        selectFileCell.padTop(20).growX().height(60);
+
 
         xSlider.changed(() -> {
             xLabel.setText(String.valueOf((int)xSlider.getValue()));
@@ -126,7 +129,6 @@ public class ModUI {
         });
         updatePreview();
 
-        // Логируем показ самого диалога
         WebLogger.logShow(dialog, "Settings Dialog");
     }
 
