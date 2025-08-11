@@ -110,7 +110,7 @@ public class ModUI {
 
         Table bottomPanel = new Table();
         if (WebLogger.ENABLE_WEB_LOGGER) {
-            bottomPanel.button("Открыть панель отладки", Icon.zoom, () -> Core.app.openURI("http://localhost:8080/debug")).growX();
+            bottomPanel.button("Открыть лог-сервер", Icon.zoom, () -> Core.app.openURI("http://localhost:8080/logs")).growX();
         }
         content.add(bottomPanel).growX().padTop(15).row();
 
@@ -181,8 +181,7 @@ public class ModUI {
                 Core.app.post(() -> {
                     if (finalResult != null && finalResult.schematic != null) {
                         // --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
-                        // Вызываем генерацию отладочного изображения здесь, в основном потоке
-                        LogicCore.generateAndLogDebugSchematicImage(finalResult.matrix, finalResult.displays, finalResult.displaySize);
+                        // Вызов удаленного метода убран.
                         
                         Vars.ui.schematics.hide();
                         Vars.control.input.useSchematic(finalResult.schematic);
