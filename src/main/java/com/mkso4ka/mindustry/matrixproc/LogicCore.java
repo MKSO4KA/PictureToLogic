@@ -1,6 +1,7 @@
 package com.mkso4ka.mindustry.matrixproc;
 
 import arc.files.Fi;
+import arc.graphics.Color; // <-- ВОТ ОН, НЕДОСТАЮЩИЙ ИМПОРТ
 import arc.graphics.Pixmap;
 import arc.struct.Seq;
 import arc.struct.StringMap;
