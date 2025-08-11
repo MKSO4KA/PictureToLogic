@@ -1,9 +1,10 @@
 package com.mkso4ka.mindustry.matrixproc;
 
+import arc.Core;
 import arc.files.Fi;
 import arc.func.Cons;
 import arc.graphics.Pixmap;
-import arc.graphics.g2d.PngWriter; // ИСПОЛЬЗУЕМ ПРАВИЛЬНЫЙ КЛАСС ДЛЯ ЗАПИСИ В ПОТОК
+import arc.graphics.PixmapIO; // Используем этот класс, но правильно
 import arc.scene.ui.Button;
 import arc.scene.ui.CheckBox;
 import arc.scene.ui.Slider;
@@ -15,7 +16,6 @@ import mindustry.Vars;
 import mindustry.ui.dialogs.BaseDialog;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -101,15 +101,22 @@ public class WebLogger extends NanoHTTPD {
 
     public static void logImage(String name, Pixmap pixmap) {
         if (!ENABLE_WEB_LOGGER || pixmap == null) return;
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-            // ИСПОЛЬЗУЕМ PngWriter, который теперь доступен благодаря правильной сборке
-            PngWriter writer = new PngWriter(baos);
-            writer.write(pixmap);
-            writer.dispose();
-            debugImages.put(name, baos.toByteArray());
-            info("Logged debug image: %s", name);
-        } catch (IOException e) {
-            err("Failed to log image %s", name);
+        
+        // --- ИСПРАВЛЕНИЕ: Используем трюк с временным файлом ---
+        Fi tempFile = Fi.tempFile("picturetologic-debug");
+        try {
+            // 1. Записываем Pixmap во временный файл
+            PixmapIO.writePng(tempFile, pixmap);
+            // 2. Читаем байты из этого файла
+            byte[] bytes = tempFile.readBytes();
+            // 3. Сохраняем байты в памяти
+            debugImages.put(name, bytes);
+            info("Logged debug image: %s (%d bytes)", name, bytes.length);
+        } catch (Exception e) {
+            err("Failed to log image %s", e);
+        } finally {
+            // 4. Гарантированно удаляем временный файл
+            tempFile.delete();
         }
     }
 
