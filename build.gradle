@@ -34,23 +34,20 @@ dependencies {
     implementation 'org.nanohttpd:nanohttpd:2.3.1'
 }
 
-// --- НОВЫЙ БЛОК: Обработка ресурсов ---
-// Эта задача будет запускаться перед сборкой JAR-файла
+// --- ИСПРАВЛЕННЫЙ БЛОК ---
 processResources {
-    // Указываем, что нужно обработать все файлы в папке resources
+    // Указываем, что делать с дубликатами (хотя их больше не будет)
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+
+    // Берем все файлы из папки ресурсов
     from(sourceSets.main.resources.srcDirs) {
-        // Но заменять плейсхолдеры только в mod.hjson
+        // И применяем фильтр ко всем, но он сработает только там, где найдет плейсхолдер
         filter(org.apache.tools.ant.filters.ReplaceTokens, tokens: [
             VERSION: project.version
         ])
-        include 'mod.hjson'
-    }
-    // Копируем все остальные ресурсы без изменений
-    from(sourceSets.main.resources.srcDirs) {
-        exclude 'mod.hjson'
     }
 }
-// ------------------------------------
+// -------------------------
 
 jar {
     archiveBaseName = project.name + "-Desktop"
