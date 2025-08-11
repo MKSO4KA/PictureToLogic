@@ -38,18 +38,17 @@ dependencies {
 }
 
 // --- ФИНАЛЬНАЯ, ИСПРАВЛЕННАЯ ЗАДАЧА ---
-// Переименована для ясности и чтобы избежать конфликтов
 task buildUniversalJar(type: Jar) {
     archiveFileName = "PictureToLogic.jar"
     
     // Зависим от стандартных задач сборки, чтобы убедиться, что все файлы готовы
-    dependsOn 'bundleReleaseAar'
+    dependsOn 'bundleReleaseAar', 'compileReleaseJavaWithJavac', 'processReleaseResources'
 
-    // 1. Берем .class файлы напрямую из их выходной директории, как это делает Android-плагин.
-    from android.sourceSets.main.java.outputs
+    // 1. Берем .class файлы из вывода задачи компиляции Java.
+    from tasks.getByName("compileReleaseJavaWithJavac").outputs.files
     
-    // 2. Берем ресурсы (mod.hjson) напрямую из их папки.
-    from android.sourceSets.main.resources.srcDirs
+    // 2. Берем ресурсы (mod.hjson) из вывода задачи обработки ресурсов.
+    from tasks.getByName("processReleaseResources").outputs.files
 
     // 3. Включаем классы всех 'implementation' зависимостей (NanoHTTPD)
     from {
