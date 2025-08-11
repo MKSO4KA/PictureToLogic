@@ -2,38 +2,50 @@ name: 2. Create Release
 
 on:
   workflow_run:
-    workflows: ["1. Build Mod JAR"] # Запускается после завершения workflow с таким именем
+    workflows: ["1. Build Mod JAR"]
     types:
-      - completed
+      - completed # Запускается всегда: и при успехе, и при ошибке
 
 jobs:
   release:
-    # Запускаем эту работу, только если workflow "1. Build Mod JAR" завершился успешно
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # УБРАНО: Условие if на уровне работы. Теперь эта работа запускается всегда.
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Необходимо для создания/обновления релиза
+      contents: write
 
     steps:
-      - name: Checkout repository
+      - name: Checkout the specific commit that was built
         uses: actions/checkout@v4
+        with:
+          # Важно: мы берем именно тот коммит, который был в workflow сборки
+          ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Download JAR artifact from build job
+      - name: Download JAR artifact (only if build succeeded)
+        # НОВОЕ: Условие if на уровне шага. Этот шаг будет пропущен, если сборка упала.
+        if: ${{ github.event.workflow_run.conclusion == 'success' }}
         uses: dawidd6/action-download-artifact@v3
         with:
-          # Скачиваем артефакт из того workflow run, который нас запустил
           workflow_run_id: ${{ github.event.workflow_run.id }}
           name: PictureToLogicMod
-          path: ./release-assets # Скачиваем в отдельную папку
+          path: ./release-assets
 
       - name: Create Source Code ZIP
+        # Этот шаг выполняется всегда
         run: zip -r ./release-assets/source-code.zip . -x ".git/*" ".github/*" "build/*" ".gradle/*"
 
       - name: Create/Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: "Latest Build"
-          body: "Автоматическая сборка мода. Этот релиз всегда содержит самую свежую версию."
-          # Указываем, что все файлы для релиза лежат в папке release-assets
+          # Если сборка успешна, тег "latest". Если нет - уникальный тег с пометкой.
+          tag_name: ${{ github.event.workflow_run.conclusion == 'success' && 'latest' || format('failed-{0}', github.event.workflow_run.id) }}
+          
+          # Имя релиза тоже зависит от успеха
+          name: ${{ github.event.workflow_run.conclusion == 'success' && 'Latest Build' || format('Build Failed - Run {0}', github.event.workflow_run.id) }}
+          
+          body: "Автоматическая сборка мода. Статус: ${{ github.event.workflow_run.conclusion }}"
+          
+          # Если сборка провалилась, создаем черновик (draft)
+          draft: ${{ github.event.workflow_run.conclusion != 'success' }}
+          
+          # Этот шаг загрузит все, что есть в папке. Если сборка упала, JAR-файла там просто не будет.
           files: ./release-assets/*
