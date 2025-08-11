@@ -34,7 +34,7 @@ jar {
     archiveBaseName = project.name + "-Desktop"
 
     from {
-        configurations.implementation.collect { it.isDirectory() ? it : zipTree(it) }
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
 }
 
