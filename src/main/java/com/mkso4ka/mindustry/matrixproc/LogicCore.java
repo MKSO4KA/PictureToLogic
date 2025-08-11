@@ -70,13 +70,35 @@ public class LogicCore {
 
                     int commandCount = allCommands.size();
                     processorsPerDisplay[displayIndex] = (int) Math.ceil((double) commandCount / maxInstructions);
+
+                    // --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ЛОГИКИ РАЗДЕЛЕНИЯ КОДА ---
                     for (int p = 0; p < processorsPerDisplay[displayIndex]; p++) {
                         int start = p * maxInstructions;
                         int end = Math.min(start + maxInstructions, commandCount);
                         List<String> chunk = allCommands.subList(start, end);
+                        
                         StringBuilder codeBuilder = new StringBuilder();
+
+                        // 1. Найти последнюю команду 'draw color' до начала этого чанка
+                        String lastColor = "";
+                        for (int k = start; k >= 0; k--) {
+                            if (allCommands.get(k).startsWith("draw color")) {
+                                lastColor = allCommands.get(k);
+                                break;
+                            }
+                        }
+
+                        // 2. Если первая команда в чанке - не 'draw color', добавить последнюю найденную
+                        if (!chunk.isEmpty() && !chunk.get(0).startsWith("draw color") && !lastColor.isEmpty()) {
+                            codeBuilder.append(lastColor).append("\n");
+                        }
+
+                        // 3. Добавить все команды из чанка
                         chunk.forEach(command -> codeBuilder.append(command).append("\n"));
+                        
+                        // 4. Добавить 'drawflush' в конце
                         codeBuilder.append("drawflush display1");
+                        
                         codeMap.get(displayIndex).add(codeBuilder.toString());
                     }
                     finalSlice.dispose();
