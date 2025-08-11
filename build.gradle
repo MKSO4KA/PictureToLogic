@@ -34,20 +34,14 @@ dependencies {
     implementation 'org.nanohttpd:nanohttpd:2.3.1'
 }
 
-// --- ИСПРАВЛЕННЫЙ БЛОК ---
 processResources {
-    // Указываем, что делать с дубликатами (хотя их больше не будет)
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
-
-    // Берем все файлы из папки ресурсов
     from(sourceSets.main.resources.srcDirs) {
-        // И применяем фильтр ко всем, но он сработает только там, где найдет плейсхолдер
         filter(org.apache.tools.ant.filters.ReplaceTokens, tokens: [
             VERSION: project.version
         ])
     }
 }
-// -------------------------
 
 jar {
     archiveBaseName = project.name + "-Desktop"
@@ -69,7 +63,11 @@ task jarAndroid (type: Jar, dependsOn: jar){
 }
 
 task deploy(type: Jar, dependsOn: jarAndroid) {
-    archiveBaseName = project.name
+    // --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
+    // Устанавливаем точное имя файла, игнорируя версию.
+    archiveFileName = "PictureToLogic.jar"
+    // ---------------------------
+
     from(zipTree(jar.archiveFile), zipTree(jarAndroid.archiveFile))
 
     doLast {
