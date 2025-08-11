@@ -1,14 +1,68 @@
-// build.gradle (в корне проекта)
 plugins {
-    id 'com.android.application' version '8.2.1' apply false
-    id 'com.android.library' version '8.2.1' apply false
+    id 'java'
 }
 
-// --- НОВЫЙ БЛОК ---
-// Эта задача находится в корневом проекте.
-// Она ничего не делает сама, а просто говорит: "Запусти задачу buildUniversalJar из модуля core".
-// Это самый надежный способ вызова.
-task deploy(dependsOn: ':core:buildUniversalJar') {
-    group = 'build'
-    description = 'Builds the universal JAR for the mod.'
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(8)
+    }
+}
+
+ext {
+    mindustryVersion = "v147"
+    isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
+}
+
+group = 'com.mkso4ka.mindustry.matrixproc'
+version = '1.0-SNAPSHOT'
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+    maven { url "https://raw.githubusercontent.com/Zelaux/MindustryRepo/master/repository" }
+    maven { url "https://raw.githubusercontent.com/Anuken/Mindustry/mvn-repo/repository" }
+    maven { url "https://jitpack.io" }
+}
+
+dependencies {
+    compileOnly "com.github.Anuken.Mindustry:core:${mindustryVersion}"
+    compileOnly "com.github.Anuken.Arc:arc-core:${mindustryVersion}"
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
+}
+
+jar {
+    archiveBaseName = project.name + "-Desktop"
+
+    from {
+        configurations.implementation.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}
+
+task jarAndroid (type: Jar, dependsOn: jar){
+    archiveBaseName = project.name + "-Android"
+    from(zipTree(jar.archiveFile))
+    doLast{
+        def d8 = new File(System.getenv("ANDROID_HOME"), "build-tools/${findLatestBuildTools()}/d8" + (isWindows ? ".bat" : ""))
+        exec{
+            commandLine d8, "--release", "--output", archiveFile.get().asFile, jar.archiveFile.get().asFile
+        }
+    }
+}
+
+task deploy(type: Jar, dependsOn: jarAndroid) {
+    archiveBaseName = project.name
+    from(zipTree(jar.archiveFile), zipTree(jarAndroid.archiveFile))
+
+    doLast {
+        delete(jar.archiveFile)
+        delete(jarAndroid.archiveFile)
+    }
+}
+
+String findLatestBuildTools(){
+    def buildTools = new File(System.getenv("ANDROID_HOME"), "build-tools")
+    if(!buildTools.exists()) return ""
+    return buildTools.listFiles().sort{ a, b ->
+        b.name.replace("-preview", ".0").compareTo(a.name.replace("-preview", ".0"))
+    }[0].name
 }
