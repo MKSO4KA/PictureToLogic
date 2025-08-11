@@ -37,37 +37,30 @@ dependencies {
     implementation 'org.nanohttpd:nanohttpd:2.3.1'
 }
 
-// --- ФИНАЛЬНАЯ, ИСПРАВЛЕННАЯ ЗАДАЧА ---
 task buildUniversalJar(type: Jar) {
     archiveFileName = "PictureToLogic.jar"
-    // Конфигурация будет добавлена ниже, в блоке libraryVariants
+    // Конфигурация будет добавлена ниже
 }
 
-// Этот блок - ключ к успеху. Он выполняется после того, как Android-плагин
-// создал все свои задачи, и дает нам безопасный доступ к ним.
 android.libraryVariants.all { variant ->
-    // Нас интересует только 'release' сборка
     if (variant.name == 'release') {
-        // Получаем ссылки на стандартные задачи через официальный API
         def javaCompileTask = variant.javaCompileProvider.get()
         def bundleAarTask = variant.packageLibraryProvider.get()
 
-        // Теперь конфигурируем нашу задачу, используя эти ссылки
         buildUniversalJar.configure {
             dependsOn javaCompileTask, bundleAarTask
 
-            // 1. Берем .class файлы из вывода задачи компиляции Java.
             from(javaCompileTask.destinationDirectory)
-            
-            // 2. Берем ресурсы (mod.hjson) из их папки.
             from(variant.sourceSets.get(0).resources.srcDirs)
 
-            // 3. Включаем классы всех 'implementation' зависимостей (NanoHTTPD)
+            // --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
+            // Используем 'releaseRuntimeClasspath', которая является "разрешимой"
+            // и содержит все 'implementation' зависимости для release-сборки.
             from {
-                configurations.implementation.collect { it.isDirectory() ? it : zipTree(it) }
+                configurations.releaseRuntimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
             }
+            // ---------------------------
 
-            // 4. Включаем классы, обработанные для Android (.dex)
             from(zipTree(bundleAarTask.outputs.files.singleFile)) {
                 include "classes.jar"
                 rename 'classes.jar', 'classes.dex'
