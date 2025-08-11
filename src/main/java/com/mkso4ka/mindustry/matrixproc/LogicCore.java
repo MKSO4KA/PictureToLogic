@@ -68,13 +68,11 @@ public class LogicCore {
                         }
                     }
 
-                    // --- ИСПОЛЬЗУЕМ НОВЫЙ ImageProcessor ---
                     ImageProcessor processor = new ImageProcessor(finalSlice);
                     ImageProcessor.ProcessingSteps steps = processor.process(tolerance, diffusionIterations, diffusionContrast);
                     
                     int offsetX = (j > 0) ? BORDER_SIZE : 0;
                     int offsetY = (i > 0) ? BORDER_SIZE : 0;
-                    // --- ГЕНЕРИРУЕМ КОМАНДЫ ДЛЯ ТРЕУГОЛЬНИКОВ ---
                     List<String> allCommands = generateTriangleCommandList(steps.result, displayPixelSize, offsetX, offsetY);
                     
                     StringBuilder fullCodeBuilder = new StringBuilder();
@@ -198,7 +196,6 @@ public class LogicCore {
         return new Schematic(tiles, tags, width, height);
     }
 
-    // --- НОВЫЙ МЕТОД ГЕНЕРАЦИИ КОМАНД ДЛЯ ТРЕУГОЛЬНИКОВ ---
     private List<String> generateTriangleCommandList(Map<Integer, List<ImageProcessor.Triangle>> triangles, int displayPixelSize, int offsetX, int offsetY) {
         List<String> commands = new ArrayList<>();
         for (Map.Entry<Integer, List<ImageProcessor.Triangle>> entry : triangles.entrySet()) {
@@ -206,7 +203,6 @@ public class LogicCore {
             if (!triangleList.isEmpty()) {
                 commands.add(formatColorCommand(entry.getKey()));
                 for (ImageProcessor.Triangle t : triangleList) {
-                    // Корректируем координаты относительно слайса и инвертируем Y для Mindustry
                     int x1 = t.x1 - offsetX;
                     int y1 = displayPixelSize - 1 - (t.y1 - offsetY);
                     int x2 = t.x2 - offsetX;

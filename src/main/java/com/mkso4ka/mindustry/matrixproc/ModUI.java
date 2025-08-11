@@ -19,6 +19,7 @@ public class ModUI {
 
     private static Slider xSlider, ySlider, toleranceSlider, instructionsSlider, diffusionIterSlider, diffusionKSlider;
     private static Label xLabel, yLabel, toleranceLabel, instructionsLabel, diffusionIterLabel, diffusionKLabel;
+    private static CheckBox transparentBgCheck;
     private static Table previewTable;
 
     public static void build() {
@@ -55,6 +56,11 @@ public class ModUI {
         leftPanel.add(yLabel).row();
 
         leftPanel.add("[accent]2. Оптимизация изображения[]").colspan(3).padTop(15).row();
+        
+        transparentBgCheck = new CheckBox(" Прозрачный фон (по цвету левого верхнего пикселя)");
+        transparentBgCheck.setChecked(true);
+        leftPanel.add(transparentBgCheck).colspan(3).left().row();
+
         diffusionIterSlider = WebLogger.logChange(new Slider(0, 10, 1, false), "Diffusion Iterations");
         diffusionIterSlider.setValue(5);
         diffusionIterLabel = new Label("5");
@@ -110,7 +116,6 @@ public class ModUI {
 
         Table bottomPanel = new Table();
         if (WebLogger.ENABLE_WEB_LOGGER) {
-            // ИЗМЕНЕНИЕ: Кнопка теперь ведет на главную страницу отладки
             bottomPanel.button("Открыть панель отладки", Icon.zoom, () -> Core.app.openURI("http://localhost:8080/")).growX();
         }
         content.add(bottomPanel).growX().padTop(15).row();
@@ -155,6 +160,7 @@ public class ModUI {
         WebLogger.info("File: %s", imageFile.name());
         WebLogger.info("Grid: %dx%d", (int)xSlider.getValue(), (int)ySlider.getValue());
         WebLogger.info("Display Type: %s", selectedDisplay.name);
+        WebLogger.info("Transparent Background: %s", transparentBgCheck.isChecked());
         WebLogger.info("Color Tolerance (Delta E): %.1f", toleranceSlider.getValue());
         WebLogger.info("Max Instructions (User): %d", (int)instructionsSlider.getValue());
         WebLogger.info("Diffusion Iterations: %d", (int)diffusionIterSlider.getValue());
@@ -166,12 +172,14 @@ public class ModUI {
                 int displaysX = (int) xSlider.getValue();
                 int displaysY = (int) ySlider.getValue();
                 double tolerance = toleranceSlider.getValue();
-                int maxInstructions = (int)instructionsSlider.getValue() - 11;
+                int maxInstructions = (int)instructionsSlider.getValue();
                 int diffusionIterations = (int)diffusionIterSlider.getValue();
                 float diffusionContrast = diffusionKSlider.getValue();
+                boolean useTransparentBg = transparentBgCheck.isChecked();
 
                 LogicCore logic = new LogicCore();
-                result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay, tolerance, maxInstructions, diffusionIterations, diffusionContrast);
+                // --- ИСПРАВЛЕНИЕ: Добавляем useTransparentBg в вызов ---
+                result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay, tolerance, maxInstructions, diffusionIterations, diffusionContrast, useTransparentBg);
             } catch (Exception e) {
                 WebLogger.err("Критическая ошибка при создании чертежа!", e);
             } finally {
