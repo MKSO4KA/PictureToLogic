@@ -1,7 +1,7 @@
 package com.mkso4ka.mindustry.matrixproc;
 
 import arc.files.Fi;
-import arc.graphics.Color; // <-- ВОТ ОН, НЕДОСТАЮЩИЙ ИМПОРТ
+import arc.graphics.Color;
 import arc.graphics.Pixmap;
 import arc.struct.Seq;
 import arc.struct.StringMap;
@@ -229,11 +229,13 @@ public class LogicCore {
 
                 if (cell.type == 1) {
                     Color color = displayColors.getOrDefault(cell.ownerId, Color.gray);
-                    pixmap.fill(x * cellSize, pixmapY * cellSize, cellSize, cellSize, color.rgba());
+                    // ИСПРАВЛЕНО: Используем fillRect вместо fill
+                    pixmap.fillRect(x * cellSize, pixmapY * cellSize, cellSize, cellSize, color.rgba());
                     pixmap.drawRect(x * cellSize, pixmapY * cellSize, cellSize, cellSize, Color.lightGray.rgba());
                 } else if (cell.type == 2) {
                     Color color = displayColors.getOrDefault(cell.ownerId, Color.gray);
-                    pixmap.fill(x * cellSize, pixmapY * cellSize, cellSize, cellSize, color.cpy().mul(0.5f).rgba());
+                    // ИСПРАВЛЕНО: Используем fillRect вместо fill
+                    pixmap.fillRect(x * cellSize, pixmapY * cellSize, cellSize, cellSize, color.cpy().mul(0.5f).rgba());
                     pixmap.drawRect(x * cellSize, pixmapY * cellSize, cellSize, cellSize, Color.white.rgba());
                 }
             }
