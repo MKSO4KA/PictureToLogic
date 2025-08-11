@@ -1,0 +1,39 @@
+name: 2. Create Release
+
+on:
+  workflow_run:
+    workflows: ["1. Build Mod JAR"] # Запускается после завершения workflow с таким именем
+    types:
+      - completed
+
+jobs:
+  release:
+    # Запускаем эту работу, только если workflow "1. Build Mod JAR" завершился успешно
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Необходимо для создания/обновления релиза
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download JAR artifact from build job
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          # Скачиваем артефакт из того workflow run, который нас запустил
+          workflow_run_id: ${{ github.event.workflow_run.id }}
+          name: PictureToLogicMod
+          path: ./release-assets # Скачиваем в отдельную папку
+
+      - name: Create Source Code ZIP
+        run: zip -r ./release-assets/source-code.zip . -x ".git/*" ".github/*" "build/*" ".gradle/*"
+
+      - name: Create/Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Latest Build"
+          body: "Автоматическая сборка мода. Этот релиз всегда содержит самую свежую версию."
+          # Указываем, что все файлы для релиза лежат в папке release-assets
+          files: ./release-assets/*
