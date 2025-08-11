@@ -25,17 +25,34 @@ public class LogicCore {
     public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, double tolerance, int maxInstructions, int diffusionIterations, float diffusionContrast) {
         try {
             WebLogger.clearDebugImages();
-            WebLogger.clearProcessorCodeLogs(); // Очищаем логи процессоров перед новым запуском
+            WebLogger.clearProcessorCodeLogs();
 
             int displaySize = displayBlock.size;
             int displayPixelSize = getDisplayPixelSize(displaySize);
             int totalWidth = (displaysX * displayPixelSize) + (Math.max(0, displaysX - 1) * BORDER_SIZE * 2);
             int totalHeight = (displaysY * displayPixelSize) + (Math.max(0, displaysY - 1) * BORDER_SIZE * 2);
 
-            Pixmap masterPixmap = new Pixmap(imageFile);
+            Pixmap originalPixmap = new Pixmap(imageFile);
+
+            // --- НАЧАЛО КОСТЫЛЯ: ПОВОРОТ ИЗОБРАЖЕНИЯ НА 90° ВПРАВО ---
+            WebLogger.info("Applying 90-degree clockwise rotation crutch...");
+            int originalWidth = originalPixmap.getWidth();
+            int originalHeight = originalPixmap.getHeight();
+            Pixmap masterPixmap = new Pixmap(originalHeight, originalWidth); // Размеры меняются местами
+
+            for (int y = 0; y < originalHeight; y++) {
+                for (int x = 0; x < originalWidth; x++) {
+                    int color = originalPixmap.get(x, y);
+                    // Формула поворота на 90 градусов по часовой стрелке
+                    masterPixmap.set(originalHeight - 1 - y, x, color);
+                }
+            }
+            originalPixmap.dispose(); // Освобождаем память от исходного изображения
+            // --- КОНЕЦ КОСТЫЛЯ ---
+
             Pixmap scaledMasterPixmap = new Pixmap(totalWidth, totalHeight);
             scaledMasterPixmap.draw(masterPixmap, 0, 0, masterPixmap.width, masterPixmap.height, 0, 0, totalWidth, totalHeight);
-            masterPixmap.dispose();
+            masterPixmap.dispose(); // Освобождаем память от повернутого изображения
 
             DisplayMatrix displayMatrix = new DisplayMatrix();
             MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, DisplayProcessorMatrixFinal.PROCESSOR_REACH);
@@ -48,7 +65,6 @@ public class LogicCore {
             for (int i = 0; i < displaysY; i++) {
                 for (int j = 0; j < displaysX; j++) {
                     int displayIndex = j * displaysY + i;
-                    codeMap.put(displayIndex, new ArrayList<>());
                     
                     int sliceWidth = displayPixelSize + (j > 0 ? BORDER_SIZE : 0) + (j < displaysX - 1 ? BORDER_SIZE : 0);
                     int sliceHeight = displayPixelSize + (i > 0 ? BORDER_SIZE : 0) + (i < displaysY - 1 ? BORDER_SIZE : 0);
@@ -57,17 +73,9 @@ public class LogicCore {
                     Pixmap finalSlice = new Pixmap(sliceWidth, sliceHeight);
                     finalSlice.draw(scaledMasterPixmap, subX, subY, sliceWidth, sliceHeight, 0, 0, sliceWidth, sliceHeight);
                     
-                    WebLogger.logImage(String.format("slice_%d_0_raw", displayIndex), finalSlice);
-
                     ImageProcessor processor = new ImageProcessor(finalSlice);
                     ImageProcessor.ProcessingSteps steps = processor.process(tolerance, diffusionIterations, diffusionContrast);
                     
-                    WebLogger.logImage(String.format("slice_%d_1_filtered", displayIndex), steps.filteredPixmap);
-                    WebLogger.logImage(String.format("slice_%d_2_quantized", displayIndex), steps.quantizedPixmap);
-
-                    Pixmap rectsPixmap = ImageProcessor.drawRectsOnPixmap(steps.quantizedPixmap, steps.result);
-                    WebLogger.logImage(String.format("slice_%d_3_rects", displayIndex), rectsPixmap);
-
                     Map<Integer, List<Rect>> rects = steps.result;
                     int offsetX = (j > 0) ? BORDER_SIZE : 0;
                     int offsetY = (i > 0) ? BORDER_SIZE : 0;
@@ -77,33 +85,50 @@ public class LogicCore {
                     allCommands.forEach(cmd -> fullCodeBuilder.append(cmd).append("\n"));
                     finalCodesForApi.add(new DisplayCodeInfo(displayIndex, fullCodeBuilder.toString(), displayPixelSize));
 
-                    List<String> processorChunks = new ArrayList<>();
+                    int safeMaxInstructions = maxInstructions - 2;
+                    if (safeMaxInstructions < 1) safeMaxInstructions = 1;
+
+                    List<String> finalProcessorCodes = new ArrayList<>();
                     if (!allCommands.isEmpty()) {
-                        List<String> currentChunk = new ArrayList<>();
+                        List<String> currentContent = new ArrayList<>();
                         String activeColor = "";
 
                         for (String command : allCommands) {
                             if (command.startsWith("draw color")) {
                                 activeColor = command;
-                            }
-                            if (currentChunk.isEmpty() && !activeColor.isEmpty()) {
-                                currentChunk.add(activeColor);
-                            }
-                            currentChunk.add(command);
-                            if (currentChunk.size() >= maxInstructions) {
-                                processorChunks.add(String.join("\n", currentChunk));
-                                currentChunk.clear();
+                                break;
                             }
                         }
-                        if (!currentChunk.isEmpty()) {
-                            processorChunks.add(String.join("\n", currentChunk));
+                        if (activeColor.isEmpty()) {
+                            activeColor = "draw color 0 0 0 255 0 0";
+                        }
+
+                        for (String command : allCommands) {
+                            if (command.startsWith("draw color")) {
+                                if (!currentContent.isEmpty()) {
+                                    String chunk = activeColor + "\n" + String.join("\n", currentContent) + "\ndrawflush display1";
+                                    finalProcessorCodes.add(chunk);
+                                    currentContent.clear();
+                                }
+                                activeColor = command;
+                            } else {
+                                currentContent.add(command);
+                                if (currentContent.size() >= safeMaxInstructions) {
+                                    String chunk = activeColor + "\n" + String.join("\n", currentContent) + "\ndrawflush display1";
+                                    finalProcessorCodes.add(chunk);
+                                    currentContent.clear();
+                                }
+                            }
+                        }
+
+                        if (!currentContent.isEmpty()) {
+                            String chunk = activeColor + "\n" + String.join("\n", currentContent) + "\ndrawflush display1";
+                            finalProcessorCodes.add(chunk);
                         }
                     }
                     
-                    for(String chunk : processorChunks){
-                        codeMap.get(displayIndex).add(chunk + "\ndrawflush display1");
-                    }
-                    processorsPerDisplay[displayIndex] = processorChunks.size();
+                    codeMap.put(displayIndex, finalProcessorCodes);
+                    processorsPerDisplay[displayIndex] = finalProcessorCodes.size();
 
                     finalSlice.dispose();
                 }
@@ -147,7 +172,6 @@ public class LogicCore {
                         code = codesForDisplay.get(cell.processorIndex);
                     }
 
-                    // ИЗМЕНЕНИЕ: Отправляем код в отдельный логгер
                     String logHeader = String.format("--- Display #%d / Processor #%d ---", cell.ownerId, cell.processorIndex);
                     WebLogger.logProcessorCode(logHeader + "\n" + code);
 
