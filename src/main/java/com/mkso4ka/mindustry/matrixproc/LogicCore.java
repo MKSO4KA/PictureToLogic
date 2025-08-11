@@ -99,7 +99,8 @@ public class LogicCore {
 
             Schematic schematic = buildSchematic(finalMatrix, finalDisplays, codeMap, displayBlock);
 
-            generateAndLogDebugSchematicImage(finalMatrix, finalDisplays, displaySize);
+            // УБРАНО: Вызов отсюда, так как это фоновый поток
+            // generateAndLogDebugSchematicImage(finalMatrix, finalDisplays, displaySize);
 
             return new ProcessingResult(schematic, finalMatrix, finalDisplays, displaySize);
 
@@ -206,7 +207,8 @@ public class LogicCore {
         return schematic;
     }
     
-    private void generateAndLogDebugSchematicImage(DisplayProcessorMatrixFinal.Cell[][] matrix, DisplayInfo[] displays, int displaySize) {
+    // ИЗМЕНЕНО: Метод теперь public static, чтобы его можно было вызвать из ModUI
+    public static void generateAndLogDebugSchematicImage(DisplayProcessorMatrixFinal.Cell[][] matrix, DisplayInfo[] displays, int displaySize) {
         if (!WebLogger.ENABLE_WEB_LOGGER) return;
 
         int height = matrix.length;
@@ -229,12 +231,10 @@ public class LogicCore {
 
                 if (cell.type == 1) {
                     Color color = displayColors.getOrDefault(cell.ownerId, Color.gray);
-                    // ИСПРАВЛЕНО: Используем fillRect вместо fill
                     pixmap.fillRect(x * cellSize, pixmapY * cellSize, cellSize, cellSize, color.rgba());
                     pixmap.drawRect(x * cellSize, pixmapY * cellSize, cellSize, cellSize, Color.lightGray.rgba());
                 } else if (cell.type == 2) {
                     Color color = displayColors.getOrDefault(cell.ownerId, Color.gray);
-                    // ИСПРАВЛЕНО: Используем fillRect вместо fill
                     pixmap.fillRect(x * cellSize, pixmapY * cellSize, cellSize, cellSize, color.cpy().mul(0.5f).rgba());
                     pixmap.drawRect(x * cellSize, pixmapY * cellSize, cellSize, cellSize, Color.white.rgba());
                 }

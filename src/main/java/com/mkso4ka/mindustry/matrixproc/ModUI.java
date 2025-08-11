@@ -180,6 +180,10 @@ public class ModUI {
                 ProcessingResult finalResult = result;
                 Core.app.post(() -> {
                     if (finalResult != null && finalResult.schematic != null) {
+                        // --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
+                        // Вызываем генерацию отладочного изображения здесь, в основном потоке
+                        LogicCore.generateAndLogDebugSchematicImage(finalResult.matrix, finalResult.displays, finalResult.displaySize);
+                        
                         Vars.ui.schematics.hide();
                         Vars.control.input.useSchematic(finalResult.schematic);
                         WebLogger.info("Schematic built successfully.");
