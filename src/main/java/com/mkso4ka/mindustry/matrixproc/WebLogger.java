@@ -43,41 +43,34 @@ public class WebLogger extends NanoHTTPD {
     public Response serve(IHTTPSession session) {
         String uri = session.getUri();
         
-        // Главная страница-хаб
         if ("/".equals(uri)) {
             return newFixedLengthResponse(Response.Status.OK, "text/html", getMainPageHtml());
         }
         
-        // Визуальный отладчик со слайсами
         if ("/debug".equals(uri)) {
             return newFixedLengthResponse(Response.Status.OK, "text/html", getDebugPageHtml());
         }
         
-        // Страница с текстовыми логами
         if ("/logs".equals(uri)) {
             return newFixedLengthResponse(Response.Status.OK, "text/html", getLogsPageHtml());
         }
 
-        // Новый эндпоинт для скачивания логов
         if ("/download-logs".equals(uri)) {
             String logContent;
             synchronized (logs) {
                 logContent = String.join("\n", logs);
             }
             Response res = newFixedLengthResponse(Response.Status.OK, "text/plain", logContent);
-            // Этот заголовок говорит браузеру скачать файл
             res.addHeader("Content-Disposition", "attachment; filename=\"picturetologic.log\"");
             return res;
         }
 
-        // API для Python-скрипта
         if ("/api/display-codes".equals(uri)) {
             Response res = newFixedLengthResponse(Response.Status.OK, "application/json", latestDisplayCodesJson);
             res.addHeader("Access-Control-Allow-Origin", "*");
             return res;
         }
 
-        // Вспомогательные эндпоинты для визуального отладчика
         if (uri.startsWith("/debug/image/")) {
             String imageName = uri.substring("/debug/image/".length());
             byte[] imageData = debugImages.get(imageName);
@@ -172,7 +165,8 @@ public class WebLogger extends NanoHTTPD {
         if (ENABLE_WEB_LOGGER) {
             slider.changed(() -> info("UI Event: Slider '%s' set to %d", name, (int)slider.getValue()));
         }
-        return button;
+        // --- ИСПРАВЛЕНИЕ: Возвращаем slider, а не button ---
+        return slider;
     }
 
     public static void logShow(BaseDialog dialog, String name) {
