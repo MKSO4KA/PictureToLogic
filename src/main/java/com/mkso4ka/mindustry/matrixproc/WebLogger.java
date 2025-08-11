@@ -28,7 +28,7 @@ public class WebLogger extends NanoHTTPD {
 
     private static final int PORT = 8080;
     private static final List<String> logs = new ArrayList<>();
-    private static final List<String> processorCodeLogs = new ArrayList<>(); // Новый список для кода процессоров
+    private static final List<String> processorCodeLogs = new ArrayList<>();
     private static WebLogger serverInstance;
     private static final SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm:ss");
 
@@ -52,12 +52,11 @@ public class WebLogger extends NanoHTTPD {
         if ("/logs".equals(uri)) {
             return newFixedLengthResponse(Response.Status.OK, "text/html", getLogsPageHtml());
         }
-        if ("/processor-codes".equals(uri)) { // Новая страница
+        if ("/processor-codes".equals(uri)) {
             return newFixedLengthResponse(Response.Status.OK, "text/html", getProcessorCodesPageHtml());
         }
 
-        // --- API-эндпоинты (отдают только данные, не HTML) ---
-        if ("/api/logs-text".equals(uri)) { // Новый эндпоинт для текста логов
+        if ("/api/logs-text".equals(uri)) {
             String logContent;
             synchronized (logs) { logContent = String.join("\n", logs); }
             return newFixedLengthResponse(Response.Status.OK, "text/plain", logContent);
@@ -97,7 +96,6 @@ public class WebLogger extends NanoHTTPD {
         info("Display codes updated for external API. %d displays.", codes.size());
     }
 
-    // Новый метод для логов кода процессоров
     public static void logProcessorCode(String code) {
         if (ENABLE_WEB_LOGGER && serverInstance != null) {
             synchronized (processorCodeLogs) {
@@ -106,7 +104,6 @@ public class WebLogger extends NanoHTTPD {
         }
     }
     
-    // Новый метод для очистки логов кода процессоров
     public static void clearProcessorCodeLogs() {
         if (ENABLE_WEB_LOGGER && serverInstance != null) {
             synchronized (processorCodeLogs) {
@@ -186,6 +183,7 @@ public class WebLogger extends NanoHTTPD {
         if (ENABLE_WEB_LOGGER) {
             slider.changed(() -> info("UI Event: Slider '%s' set to %f", name, slider.getValue()));
         }
+        // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
         return slider;
     }
 
@@ -266,7 +264,6 @@ public class WebLogger extends NanoHTTPD {
             "<pre id='logs'>Loading...</pre>" +
             "<script>" +
             "const logsPre = document.getElementById('logs');" +
-            // ИСПРАВЛЕНИЕ: Запрашиваем текст с /api/logs-text, а не с /logs
             "function fetchLogs(){ fetch('/api/logs-text').then(res => res.text()).then(text => { logsPre.textContent = text; }); }" +
             "setInterval(fetchLogs, 2000);" +
             "fetchLogs();" +
