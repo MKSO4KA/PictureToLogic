@@ -33,7 +33,8 @@ ext{
 dependencies {
     compileOnly "com.github.Anuken.Mindustry:core:${mindustryVersion}"
     compileOnly "com.github.Anuken.Arc:arc-core:${mindustryVersion}"
-    compileOnly "com.github.Anuken.Mindustry:android:${mindustryVersion}"
+    // --- УДАЛЕНО: Эта строка вызывала ошибку, так как такой библиотеки не существует ---
+    // compileOnly "com.github.Anuken.Mindustry:android:${mindustryVersion}"
     implementation 'org.nanohttpd:nanohttpd:2.3.1'
 }
 
@@ -53,13 +54,9 @@ android.libraryVariants.all { variant ->
             from(javaCompileTask.destinationDirectory)
             from(variant.sourceSets.get(0).resources.srcDirs)
 
-            // --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
-            // Используем 'releaseRuntimeClasspath', которая является "разрешимой"
-            // и содержит все 'implementation' зависимости для release-сборки.
             from {
                 configurations.releaseRuntimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
             }
-            // ---------------------------
 
             from(zipTree(bundleAarTask.outputs.files.singleFile)) {
                 include "classes.jar"
