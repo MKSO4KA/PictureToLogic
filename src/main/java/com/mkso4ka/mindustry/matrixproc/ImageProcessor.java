@@ -33,7 +33,8 @@ public class ImageProcessor {
 
     public ProcessingSteps process(double tolerance, int filterStrength) {
         Pixmap filteredPixmap = (filterStrength > 0) ? applyMedianFilter(originalPixmap, filterStrength) : originalPixmap;
-        Pixmap quantizedPixmap = (tolerance > 0) ? quantize(filteredPixmap) : filteredPixmap;
+        // ИСПРАВЛЕНО: Передаем в quantize и отфильтрованное изображение, и допуск
+        Pixmap quantizedPixmap = (tolerance > 0) ? quantize(filteredPixmap, tolerance) : filteredPixmap;
         Map<Integer, List<Rect>> rects = groupOptimal(quantizedPixmap);
         return new ProcessingSteps(filteredPixmap, quantizedPixmap, rects);
     }
@@ -63,14 +64,16 @@ public class ImageProcessor {
         return result;
     }
 
-    private Pixmap quantize(double tolerance) {
+    // ИСПРАВЛЕНО: Метод теперь принимает Pixmap для обработки
+    private Pixmap quantize(Pixmap source, double tolerance) {
         Pixmap quantizedPixmap = new Pixmap(width, height);
         List<Integer> palette = new ArrayList<>();
         Map<Integer, double[]> labCache = new HashMap<>();
 
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-                int originalColor = originalPixmap.get(x, y);
+                // ИСПРАВЛЕНО: Используем 'source', а не 'originalPixmap'
+                int originalColor = source.get(x, y);
                 
                 if ((originalColor & 0xff) == 0) {
                     quantizedPixmap.set(x, y, originalColor);
