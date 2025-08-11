@@ -99,9 +99,6 @@ public class LogicCore {
 
             Schematic schematic = buildSchematic(finalMatrix, finalDisplays, codeMap, displayBlock);
 
-            // УБРАНО: Вызов отсюда, так как это фоновый поток
-            // generateAndLogDebugSchematicImage(finalMatrix, finalDisplays, displaySize);
-
             return new ProcessingResult(schematic, finalMatrix, finalDisplays, displaySize);
 
         } catch (Exception e) {
@@ -147,17 +144,6 @@ public class LogicCore {
         for (DisplayInfo display : displays) {
             short finalX = (short)display.bottomLeft.x;
             short finalY = (short)display.bottomLeft.y;
-
-            if (displayBlock.size == 6) {
-                finalX += 2;
-                finalY += 2;
-            }
-            else if (displayBlock.size == 3)
-            {
-                finalX += 1;
-                finalY += 1;
-            }
-
             tiles.add(new Stile(displayBlock, finalX, finalY, null, (byte) 0));
         }
         
@@ -173,14 +159,18 @@ public class LogicCore {
             data.displays = new ArrayList<>();
             data.processors = new ArrayList<>();
 
+            // --- НАЧАЛО ИСПРАВЛЕНИЯ ---
+            // В этом цикле мы заполняем данные для API.
+            // Нужно убедиться, что поле 'id' присваивается.
             for (DisplayInfo display : displays) {
                 DisplayData dd = new DisplayData();
-                dd.id = display.id;
+                dd.id = display.id; // <--- ЭТА СТРОКА ДОБАВЛЕНА/ИСПРАВЛЕНА
                 dd.x = display.bottomLeft.x;
                 dd.y = display.bottomLeft.y;
                 dd.size = displayBlock.size;
                 data.displays.add(dd);
             }
+            // --- КОНЕЦ ИСПРАВЛЕНИЯ ---
 
             for (int row = 0; row < data.height; row++) {
                 for (int col = 0; col < data.width; col++) {
@@ -207,7 +197,6 @@ public class LogicCore {
         return schematic;
     }
     
-    // ИЗМЕНЕНО: Метод теперь public static, чтобы его можно было вызвать из ModUI
     public static void generateAndLogDebugSchematicImage(DisplayProcessorMatrixFinal.Cell[][] matrix, DisplayInfo[] displays, int displaySize) {
         if (!WebLogger.ENABLE_WEB_LOGGER) return;
 
