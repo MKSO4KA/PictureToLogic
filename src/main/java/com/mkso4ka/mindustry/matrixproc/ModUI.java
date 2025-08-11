@@ -110,7 +110,8 @@ public class ModUI {
 
         Table bottomPanel = new Table();
         if (WebLogger.ENABLE_WEB_LOGGER) {
-            bottomPanel.button("Открыть лог-сервер", Icon.zoom, () -> Core.app.openURI("http://localhost:8080/logs")).growX();
+            // ИЗМЕНЕНИЕ: Кнопка теперь ведет на главную страницу отладки
+            bottomPanel.button("Открыть панель отладки", Icon.zoom, () -> Core.app.openURI("http://localhost:8080/")).growX();
         }
         content.add(bottomPanel).growX().padTop(15).row();
 
@@ -180,9 +181,6 @@ public class ModUI {
                 ProcessingResult finalResult = result;
                 Core.app.post(() -> {
                     if (finalResult != null && finalResult.schematic != null) {
-                        // --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
-                        // Вызов удаленного метода убран.
-                        
                         Vars.ui.schematics.hide();
                         Vars.control.input.useSchematic(finalResult.schematic);
                         WebLogger.info("Schematic built successfully.");

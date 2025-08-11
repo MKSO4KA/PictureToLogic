@@ -43,16 +43,51 @@ public class WebLogger extends NanoHTTPD {
     public Response serve(IHTTPSession session) {
         String uri = session.getUri();
         
-        if ("/api/display-codes".equals(uri)) {
-            Response res = newFixedLengthResponse(Response.Status.OK, "application/json", latestDisplayCodesJson);
-            res.addHeader("Access-Control-Allow-Origin", "*"); // Разрешаем кросс-доменные запросы
+        // Главная страница-хаб
+        if ("/".equals(uri)) {
+            return newFixedLengthResponse(Response.Status.OK, "text/html", getMainPageHtml());
+        }
+        
+        // Визуальный отладчик со слайсами
+        if ("/debug".equals(uri)) {
+            return newFixedLengthResponse(Response.Status.OK, "text/html", getDebugPageHtml());
+        }
+        
+        // Страница с текстовыми логами
+        if ("/logs".equals(uri)) {
+            return newFixedLengthResponse(Response.Status.OK, "text/html", getLogsPageHtml());
+        }
+
+        // Новый эндпоинт для скачивания логов
+        if ("/download-logs".equals(uri)) {
+            String logContent;
+            synchronized (logs) {
+                logContent = String.join("\n", logs);
+            }
+            Response res = newFixedLengthResponse(Response.Status.OK, "text/plain", logContent);
+            // Этот заголовок говорит браузеру скачать файл
+            res.addHeader("Content-Disposition", "attachment; filename=\"picturetologic.log\"");
             return res;
         }
 
-        if ("/logs".equals(uri)) {
-            String response;
-            synchronized (logs) { response = String.join("\n", logs); }
-            return newFixedLengthResponse(Response.Status.OK, "text/plain", response);
+        // API для Python-скрипта
+        if ("/api/display-codes".equals(uri)) {
+            Response res = newFixedLengthResponse(Response.Status.OK, "application/json", latestDisplayCodesJson);
+            res.addHeader("Access-Control-Allow-Origin", "*");
+            return res;
+        }
+
+        // Вспомогательные эндпоинты для визуального отладчика
+        if (uri.startsWith("/debug/image/")) {
+            String imageName = uri.substring("/debug/image/".length());
+            byte[] imageData = debugImages.get(imageName);
+            if (imageData != null) {
+                return newFixedLengthResponse(Response.Status.OK, "image/png", new ByteArrayInputStream(imageData), imageData.length);
+            }
+        }
+        if ("/debug/list".equals(uri)) {
+            String json = "[\"" + String.join("\",\"", debugImages.keySet()) + "\"]";
+            return newFixedLengthResponse(Response.Status.OK, "application/json", json);
         }
 
         return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not Found");
@@ -137,7 +172,7 @@ public class WebLogger extends NanoHTTPD {
         if (ENABLE_WEB_LOGGER) {
             slider.changed(() -> info("UI Event: Slider '%s' set to %d", name, (int)slider.getValue()));
         }
-        return slider;
+        return button;
     }
 
     public static void logShow(BaseDialog dialog, String name) {
@@ -161,5 +196,64 @@ public class WebLogger extends NanoHTTPD {
             }
             callback.get(file);
         });
+    }
+
+    private String getStyle() {
+        return "<style>" +
+            "body{font-family:sans-serif;background-color:#2c2c2c;color:#e0e0e0; margin:20px;} " +
+            "a{color:#ffd06b; text-decoration:none;} h1,h2{border-bottom:1px solid #555; padding-bottom:5px;} " +
+            "button, .button{background-color:#4a4a4a; color:#e0e0e0; border:1px solid #666; padding:10px 15px; margin:5px; border-radius:5px; cursor:pointer; font-size:16px; display:inline-block;}" +
+            "button:hover, .button:hover{background-color:#5a5a5a;}" +
+            ".container{display:flex; flex-wrap:wrap; gap: 20px; margin-top:20px;} " +
+            ".slice{border:1px solid #555; padding:10px; background-color:#3c3c3c; border-radius:5px;} " +
+            "img{border:1px solid #888; margin-top:5px; max-width:400px; image-rendering:pixelated; display:block;}" +
+            "pre{white-space:pre-wrap;word-break:break-all; background-color:#1e1e1e; padding:10px; border-radius:5px;}" +
+            "</style>";
+    }
+
+    private String getMainPageHtml() {
+        return "<html><head><title>PictureToLogic Debug Hub</title>" + getStyle() + "</head>" +
+            "<body><h1>PictureToLogic Debug Hub</h1>" +
+            "<a href='/debug' class='button'>Visual Debugger (Slices)</a>" +
+            "<a href='/logs' class='button'>Text Logs</a>" +
+            "</body></html>";
+    }
+
+    private String getDebugPageHtml() {
+        return "<html><head><title>Visual Debugger</title>" + getStyle() + "</head>" +
+            "<body><h1>Visual Debugger</h1>" +
+            "<a href='/' class='button'>Back to Hub</a>" +
+            "<button onclick='location.reload()'>Refresh Images</button>" +
+            "<div id='slicesContainer' class='container'></div>" +
+            "<script>" +
+            "const slicesDiv = document.getElementById('slicesContainer');" +
+            "fetch('/debug/list').then(r => r.json()).then(files => {" +
+            "  const slices = {};" +
+            "  files.forEach(f => { if(f.startsWith('slice_')) { const parts = f.split('_'); const id = parts[1]; if(!slices[id]) slices[id] = []; slices[id].push(f); } });" +
+            "  for(const id in slices){" +
+            "    const sliceDiv = document.createElement('div'); sliceDiv.className = 'slice';" +
+            "    sliceDiv.innerHTML = `<h2>Slice #${id}</h2>`;" +
+            "    slices[id].sort().forEach(f => {" +
+            "      const name = f.split('_').slice(2).join('_').replace('.png','');" +
+            "      sliceDiv.innerHTML += `<div><h3>${name}</h3><img src='/debug/image/${f}?t=" + System.currentTimeMillis() + "'></div>`;" +
+            "    });" +
+            "    slicesDiv.appendChild(sliceDiv);" +
+            "  }" +
+            "});" +
+            "</script></body></html>";
+    }
+
+    private String getLogsPageHtml() {
+        return "<html><head><title>Text Logs</title>" + getStyle() + "</head>" +
+            "<body><h1>Text Logs</h1>" +
+            "<a href='/' class='button'>Back to Hub</a>" +
+            "<a href='/download-logs' class='button'>Download as .log file</a>" +
+            "<pre id='logs'>Loading...</pre>" +
+            "<script>" +
+            "const logsPre = document.getElementById('logs');" +
+            "function fetchLogs(){ fetch('/logs').then(res => res.text()).then(text => { logsPre.textContent = text; }); }" +
+            "setInterval(fetchLogs, 2000);" +
+            "fetchLogs();" +
+            "</script></body></html>";
     }
 }
