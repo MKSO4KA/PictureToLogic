@@ -25,14 +25,17 @@ repositories {
     mavenCentral()
     maven { url "https://raw.githubusercontent.com/Zelaux/MindustryRepo/master/repository" }
     maven { url "https://raw.githubusercontent.com/Anuken/Mindustry/mvn-repo/repository" }
-    // --- ИСПРАВЛЕНИЕ: РЕПОЗИТОРИЙ JITPACK УДАЛЕН, ТАК КАК ОН НЕ НУЖЕН И ВЫЗЫВАЕТ ОШИБКУ ---
+    // --- ИСПРАВЛЕНИЕ: Возвращаем JitPack, он необходим для delaunator-java ---
+    maven { url "https://jitpack.io" }
 }
 
 dependencies {
     compileOnly "com.github.Anuken.Mindustry:core:${mindustryVersion}"
     compileOnly "com.github.Anuken.Arc:arc-core:${mindustryVersion}"
     implementation 'org.nanohttpd:nanohttpd:2.3.1'
-    implementation 'io.github.jdiemke:delaunator-java:1.0.3'
+    
+    // --- ИСПРАВЛЕНИЕ: Используем правильное имя зависимости для JitPack ---
+    implementation 'com.github.jdiemke:delaunator-java:1.0.3'
 }
 
 processResources {
