@@ -207,19 +207,27 @@ public class WebLogger extends NanoHTTPD {
 
     private String getDebugPageHtml() {
         return "<html><head><title>Visual Debugger</title>" +
-            "<style>body{font-family:sans-serif;background-color:#2c2c2c;color:#e0e0e0;} a{color:#ffd06b;} .slice{border:1px solid #555; margin:10px; padding:10px; display:inline-block;} img{border:1px solid #888; margin:5px;}</style></head>" +
-            "<body><h1>Visual Debugger</h1><p><a href='/'>Back to Text Logs</a></p><div id='slices'></div>" +
+            "<style>" +
+            "body{font-family:sans-serif;background-color:#2c2c2c;color:#e0e0e0; margin:0; padding:20px;} " +
+            "a{color:#ffd06b;} h1,h2{border-bottom:1px solid #555; padding-bottom:5px;} " +
+            ".container{display:flex; flex-wrap:wrap;} " +
+            ".slice{border:1px solid #555; margin:10px; padding:10px; background-color:#3c3c3c;} " +
+            "img{border:1px solid #888; margin:5px; max-width:400px; image-rendering:pixelated;}" +
+            "</style></head>" +
+            "<body><h1>Visual Debugger</h1><p><a href='/'>Back to Text Logs</a></p>" +
+            "<div class='slice'><h2>Final Schematic Layout</h2><img src='/debug/image/schematic_0_final_layout.png?t=" + System.currentTimeMillis() + "'></div>" +
+            "<div id='slicesContainer' class='container'></div>" +
             "<script>" +
-            "const slicesDiv = document.getElementById('slices');" +
+            "const slicesDiv = document.getElementById('slicesContainer');" +
             "fetch('/debug/list').then(r => r.json()).then(files => {" +
             "  const slices = {};" +
-            "  files.forEach(f => { const parts = f.split('_'); const id = parts[1]; if(!slices[id]) slices[id] = []; slices[id].push(f); });" +
+            "  files.forEach(f => { if(f.startsWith('slice_')) { const parts = f.split('_'); const id = parts[1]; if(!slices[id]) slices[id] = []; slices[id].push(f); } });" +
             "  for(const id in slices){" +
             "    const sliceDiv = document.createElement('div'); sliceDiv.className = 'slice';" +
             "    sliceDiv.innerHTML = `<h2>Slice #${id}</h2>`;" +
             "    slices[id].sort().forEach(f => {" +
-            "      const name = f.split('_').slice(2).join('_');" +
-            "      sliceDiv.innerHTML += `<div><h3>${name}</h3><img src='/debug/image/${f}'></div>`;" +
+            "      const name = f.split('_').slice(2).join('_').replace('.png','');" +
+            "      sliceDiv.innerHTML += `<div><h3>${name}</h3><img src='/debug/image/${f}?t=" + System.currentTimeMillis() + "'></div>`;" +
             "    });" +
             "    slicesDiv.appendChild(sliceDiv);" +
             "  }" +

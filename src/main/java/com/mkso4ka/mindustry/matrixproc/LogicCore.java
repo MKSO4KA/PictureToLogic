@@ -1,6 +1,7 @@
 package com.mkso4ka.mindustry.matrixproc;
 
 import arc.files.Fi;
+import arc.graphics.Color;
 import arc.graphics.Pixmap;
 import arc.struct.Seq;
 import arc.struct.StringMap;
@@ -97,6 +98,8 @@ public class LogicCore {
             DisplayInfo[] finalDisplays = matrixFinal.getDisplays();
 
             Schematic schematic = buildSchematic(finalMatrix, finalDisplays, codeMap, displayBlock);
+
+            generateAndLogDebugSchematicImage(finalMatrix, finalDisplays, displaySize);
 
             return new ProcessingResult(schematic, finalMatrix, finalDisplays, displaySize);
 
@@ -203,6 +206,41 @@ public class LogicCore {
         return schematic;
     }
     
+    private void generateAndLogDebugSchematicImage(DisplayProcessorMatrixFinal.Cell[][] matrix, DisplayInfo[] displays, int displaySize) {
+        if (!WebLogger.ENABLE_WEB_LOGGER) return;
+
+        int height = matrix.length;
+        int width = matrix[0].length;
+        int cellSize = 8;
+        Pixmap pixmap = new Pixmap(width * cellSize, height * cellSize);
+        pixmap.fill(Color.darkGray.rgba());
+
+        Map<Integer, Color> displayColors = new HashMap<>();
+        float hue = 0.1f;
+        for (DisplayInfo display : displays) {
+            displayColors.put(display.id, new Color().fromHsv(hue * 360f, 0.8f, 1f));
+            hue = (hue + 0.618034f) % 1.0f;
+        }
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                DisplayProcessorMatrixFinal.Cell cell = matrix[y][x];
+                int pixmapY = height - 1 - y;
+
+                if (cell.type == 1) {
+                    Color color = displayColors.getOrDefault(cell.ownerId, Color.gray);
+                    pixmap.fill(x * cellSize, pixmapY * cellSize, cellSize, cellSize, color.rgba());
+                    pixmap.drawRect(x * cellSize, pixmapY * cellSize, cellSize, cellSize, Color.lightGray.rgba());
+                } else if (cell.type == 2) {
+                    Color color = displayColors.getOrDefault(cell.ownerId, Color.gray);
+                    pixmap.fill(x * cellSize, pixmapY * cellSize, cellSize, cellSize, color.cpy().mul(0.5f).rgba());
+                    pixmap.drawRect(x * cellSize, pixmapY * cellSize, cellSize, cellSize, Color.white.rgba());
+                }
+            }
+        }
+        WebLogger.logImage("schematic_0_final_layout", pixmap);
+    }
+
     private List<String> generateCommandList(Map<Integer, List<Rect>> rects, int displayPixelSize, int offsetX, int offsetY) {
         List<String> commands = new ArrayList<>();
         for (Map.Entry<Integer, List<Rect>> entry : rects.entrySet()) {

@@ -16,7 +16,6 @@ import mindustry.world.blocks.logic.LogicDisplay;
 public class ModUI {
 
     private static LogicDisplay selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay;
-    private static boolean showDebug = true;
 
     private static Slider xSlider, ySlider, toleranceSlider, luminanceSlider, instructionsSlider, diffusionIterSlider, diffusionKSlider;
     private static Label xLabel, yLabel, toleranceLabel, luminanceLabel, instructionsLabel, diffusionIterLabel, diffusionKLabel;
@@ -44,7 +43,6 @@ public class ModUI {
         Table leftPanel = new Table();
         leftPanel.defaults().pad(2).left();
 
-        // --- Секция 1: Сетка ---
         leftPanel.add("[accent]1. Настройки сетки[]").colspan(3).row();
         xSlider = WebLogger.logChange(new Slider(1, 10, 1, false), "Displays X");
         ySlider = WebLogger.logChange(new Slider(1, 10, 1, false), "Displays Y");
@@ -56,7 +54,6 @@ public class ModUI {
         leftPanel.add(ySlider).width(200f).pad(5);
         leftPanel.add(yLabel).row();
 
-        // --- Секция 2: Оптимизация изображения ---
         leftPanel.add("[accent]2. Оптимизация изображения[]").colspan(3).padTop(15).row();
         diffusionIterSlider = WebLogger.logChange(new Slider(0, 10, 1, false), "Diffusion Iterations");
         diffusionIterSlider.setValue(5);
@@ -86,7 +83,6 @@ public class ModUI {
         leftPanel.add(luminanceSlider).width(200f).pad(5);
         leftPanel.add(luminanceLabel).row();
 
-        // --- Секция 3: Настройки вывода ---
         leftPanel.add("[accent]3. Настройки вывода[]").colspan(3).padTop(15).row();
         instructionsSlider = WebLogger.logChange(new Slider(100, 1000, 100, false), "Max Instructions");
         instructionsSlider.setValue(1000);
@@ -95,7 +91,6 @@ public class ModUI {
         leftPanel.add(instructionsSlider).width(200f).pad(5);
         leftPanel.add(instructionsLabel).row();
 
-        // --- Правая панель ---
         Table rightPanel = new Table();
         previewTable = new Table();
         previewTable.setBackground(Tex.buttonDown);
@@ -120,15 +115,12 @@ public class ModUI {
         mainTable.add(rightPanel).padLeft(20);
         content.add(mainTable).row();
 
-        // --- Нижняя панель ---
         Table bottomPanel = new Table();
         if (WebLogger.ENABLE_WEB_LOGGER) {
-            bottomPanel.button("Визуальный отладчик", Icon.zoom, () -> Core.app.openURI("http://localhost:8080/debug")).left();
+            bottomPanel.button("Открыть панель отладки", Icon.zoom, () -> {
+                Core.app.openURI("http://localhost:8080/debug");
+            }).growX();
         }
-        CheckBox debugCheckBox = new CheckBox("Отладочное окно");
-        debugCheckBox.setChecked(showDebug);
-        debugCheckBox.changed(() -> showDebug = debugCheckBox.isChecked());
-        bottomPanel.add(WebLogger.logToggle(debugCheckBox, "Show Debug Window")).expandX().right();
         content.add(bottomPanel).growX().padTop(15).row();
 
         Runnable fileChooserAction = () -> WebLogger.logFileChooser(file -> {
@@ -141,7 +133,6 @@ public class ModUI {
         WebLogger.logClick(selectFileCell.get(), "Select Image and Create");
         selectFileCell.padTop(10).growX().height(60);
 
-        // --- Слушатели ---
         xSlider.changed(() -> { xLabel.setText(String.valueOf((int)xSlider.getValue())); updatePreview(); });
         ySlider.changed(() -> { yLabel.setText(String.valueOf((int)ySlider.getValue())); updatePreview(); });
         toleranceSlider.changed(() -> toleranceLabel.setText(String.format("%.1f", toleranceSlider.getValue())));
@@ -201,79 +192,14 @@ public class ModUI {
                 ProcessingResult finalResult = result;
                 Core.app.post(() -> {
                     if (finalResult != null && finalResult.schematic != null) {
-                        if (showDebug) {
-                            showDebugDialog(finalResult);
-                        } else {
-                            Vars.ui.schematics.hide();
-                            Vars.control.input.useSchematic(finalResult.schematic);
-                            WebLogger.info("Schematic built successfully.");
-                        }
+                        Vars.ui.schematics.hide();
+                        Vars.control.input.useSchematic(finalResult.schematic);
+                        WebLogger.info("Schematic built successfully.");
                     } else {
                         WebLogger.err("Failed to create schematic. Check logs for details.");
                     }
                 });
             }
         }).start();
-    }
-
-    private static void showDebugDialog(ProcessingResult result) {
-        BaseDialog dialog = new BaseDialog("Отладка размещения");
-        
-        StringBuilder sb = new StringBuilder();
-        sb.append("[lightgray]Матрица: ").append(result.matrixWidth).append("x").append(result.matrixHeight).append("\n");
-        sb.append("Размер дисплея: ").append(result.displaySize).append("x").append(result.displaySize).append("\n\n");
-        
-        sb.append("[accent]Информация по дисплеям:[]\n");
-        for (DisplayInfo display : result.displays) {
-            sb.append("  ID: ").append(display.id);
-            sb.append(" | BL: (").append(display.bottomLeft.x).append(",").append(display.bottomLeft.y).append(")");
-            sb.append(" | Требуется: ").append(display.totalProcessorsRequired);
-            sb.append(" | Размещено: ").append(display.processorsPlaced);
-            if (display.getProcessorsNeeded() > 0) {
-                sb.append(" [scarlet](НЕХВАТКА)[]");
-            }
-            sb.append("\n");
-        }
-        sb.append("\n[accent]Визуализация матрицы (P-процессор, D-дисплей):[]\n");
-
-        for (int y = result.matrixHeight - 1; y >= 0; y--) {
-            for (int x = 0; x < result.matrixWidth; x++) {
-                DisplayProcessorMatrixFinal.Cell cell = result.matrix[y][x];
-                switch(cell.type) {
-                    case 1:
-                        sb.append("[#").append(mindustry.graphics.Pal.accent.toString()).append("]P[]");
-                        break;
-                    case 2:
-                        sb.append("[#").append(mindustry.graphics.Pal.items.toString()).append("]D[]");
-                        break;
-                    default:
-                        sb.append("[lightgray].[]");
-                        break;
-                }
-            }
-            sb.append("\n");
-        }
-        
-        final String debugText = sb.toString();
-
-        Table content = dialog.cont;
-        Label label = new Label(debugText);
-        ScrollPane scroll = new ScrollPane(label, Styles.defaultPane);
-        content.add(scroll).grow().width(Core.graphics.getWidth() * 0.8f).height(Core.graphics.getHeight() * 0.7f);
-
-        dialog.buttons.button("Копировать", Icon.copy, () -> {
-            Core.app.setClipboardText(label.getText().toString());
-            Vars.ui.showInfo("Отладочная информация скопирована.");
-        }).size(200, 54);
-
-        dialog.buttons.button("Построить схему", Icon.ok, () -> {
-            dialog.hide();
-            Vars.ui.schematics.hide();
-            Vars.control.input.useSchematic(result.schematic);
-        }).size(220, 54);
-        
-        dialog.buttons.button("Отмена", Icon.cancel, dialog::hide).size(150, 54);
-
-        WebLogger.logShow(dialog, "Debug Dialog");
     }
 }
