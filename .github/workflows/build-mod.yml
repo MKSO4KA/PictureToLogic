@@ -1,4 +1,4 @@
-name: Build and Release Mod
+name: Build Mod JAR
 
 on:
   push:
@@ -6,10 +6,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-release:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # Необходимо для создания/обновления релиза
 
     steps:
       - name: Checkout repository
@@ -28,19 +26,15 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Universal Jar with Gradle
-        id: build_jar
         run: ./gradlew deploy
 
-      - name: Create Source Code ZIP
-        run: zip -r source-code.zip . -x ".git/*" ".github/*" "build/*" ".gradle/*"
-
-      - name: Create/Update GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: latest
-          name: "Latest Build"
-          body: "Автоматическая сборка мода. Этот релиз всегда содержит самую свежую версию."
-          # Важно: `prerelease: false` и `make_latest: true` не нужны, так как мы перезаписываем тег
-          files: |
-            build/libs/PictureToLogic.jar
-            source-code.zip
+          # Имя артефакта в точности соответствует тому, что ожидает твой скрипт
+          name: PictureToLogicMod
+          
+          path: build/libs/PictureToLogic.jar
+          
+          if-no-files-found: error
+          retention-days: 7

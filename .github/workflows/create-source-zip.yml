@@ -1,0 +1,22 @@
+name: Create Source Code ZIP
+
+on:
+  workflow_dispatch: # Позволяет запускать вручную
+
+jobs:
+  zip-source:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create Source Code ZIP
+        run: zip -r source-code.zip . -x ".git/*" ".github/*" "build/*" ".gradle/*"
+
+      - name: Upload Source Code Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SourceCode
+          path: source-code.zip
+          retention-days: 7
