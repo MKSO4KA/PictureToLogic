@@ -2,15 +2,11 @@ plugins {
     id 'java'
 }
 
-// --- Читаем версию из gradle.properties ---
-// Загружаем файл
 def props = new Properties()
 file("gradle.properties").withInputStream { props.load(it) }
 
-// Устанавливаем версию для проекта
 group = 'com.mkso4ka.mindustry.matrixproc'
 version = props.getProperty("modVersion", "1.0-SNAPSHOT")
-// -----------------------------------------
 
 java {
     toolchain {
@@ -37,6 +33,24 @@ dependencies {
     compileOnly "com.github.Anuken.Arc:arc-core:${mindustryVersion}"
     implementation 'org.nanohttpd:nanohttpd:2.3.1'
 }
+
+// --- НОВЫЙ БЛОК: Обработка ресурсов ---
+// Эта задача будет запускаться перед сборкой JAR-файла
+processResources {
+    // Указываем, что нужно обработать все файлы в папке resources
+    from(sourceSets.main.resources.srcDirs) {
+        // Но заменять плейсхолдеры только в mod.hjson
+        filter(org.apache.tools.ant.filters.ReplaceTokens, tokens: [
+            VERSION: project.version
+        ])
+        include 'mod.hjson'
+    }
+    // Копируем все остальные ресурсы без изменений
+    from(sourceSets.main.resources.srcDirs) {
+        exclude 'mod.hjson'
+    }
+}
+// ------------------------------------
 
 jar {
     archiveBaseName = project.name + "-Desktop"

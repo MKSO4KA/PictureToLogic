@@ -1,23 +1,24 @@
-# Имя, которое видят игроки
+#the mod name as displayed in-game
 displayName: "Picture To Logic"
 
-# Внутреннее имя мода (без пробелов, маленькими буквами)
+#the internal name of your mod
 name: "picture-to-logic"
 
-# Ваше имя
+#your name
 author: "MKSO4KA"
 
-# Полный путь к главному классу
+#the main class of your mod
 main: "com.mkso4ka.mindustry.matrixproc.PictureToLogicMod"
 
-# Описание мода
-description: "Преобразует изображения в чертежи для логических дисплеев."
+#the mod description as seen in the mod dialog
+description: "A Mindustry mod that converts images into logic schematics."
 
-# Версия мода
-version: "1.0"
+#the mod version
+# ВЕРСИЯ ТЕПЕРЬ БУДЕТ ЗАМЕНЕНА АВТОМАТИЧЕСКИ
+version: "@VERSION@"
 
-# Минимальная версия игры
-minGameVersion: "147" # Можно оставить 146 или обновить до ~150
+#the minimum game build required to run this mod
+minGameVersion: "146"
 
-# САМАЯ ВАЖНАЯ СТРОКА: Указываем, что это Java-мод
+#this is a java mod
 java: true
