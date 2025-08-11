@@ -21,21 +21,19 @@ ext {
 
 sourceCompatibility = 17
 
+// Репозитории теперь нужны только для Mindustry API
 repositories {
     mavenCentral()
     maven { url "https://raw.githubusercontent.com/Zelaux/MindustryRepo/master/repository" }
     maven { url "https://raw.githubusercontent.com/Anuken/Mindustry/mvn-repo/repository" }
-    // --- ВОЗВРАЩАЕМ JITPACK ---
-    maven { url "https://jitpack.io" }
 }
 
 dependencies {
     compileOnly "com.github.Anuken.Mindustry:core:${mindustryVersion}"
     compileOnly "com.github.Anuken.Arc:arc-core:${mindustryVersion}"
-    implementation 'org.nanohttpd:nanohttpd:2.3.1'
     
-    // --- ИСПРАВЛЯЕМ КООРДИНАТЫ ЗАВИСИМОСТИ НА ПРАВИЛЬНЫЕ ДЛЯ JITPACK ---
-    implementation 'com.github.jdiemke:delaunator-java:v1.0.3'
+    // --- ГЛАВНОЕ ИЗМЕНЕНИЕ: Подключаем все JAR из папки libs ---
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
 }
 
 processResources {
