@@ -22,10 +22,10 @@ ext {
 sourceCompatibility = 17
 
 repositories {
-    mavenCentral()
+    mavenCentral() // <-- Главный репозиторий, здесь есть delaunator-java
     maven { url "https://raw.githubusercontent.com/Zelaux/MindustryRepo/master/repository" }
     maven { url "https://raw.githubusercontent.com/Anuken/Mindustry/mvn-repo/repository" }
-    maven { url "https://jitpack.io" }
+    // maven { url "https://jitpack.io" } // <-- УДАЛЯЕМ ПРОБЛЕМНЫЙ РЕПОЗИТОРИЙ
 }
 
 dependencies {
@@ -33,7 +33,7 @@ dependencies {
     compileOnly "com.github.Anuken.Arc:arc-core:${mindustryVersion}"
     implementation 'org.nanohttpd:nanohttpd:2.3.1'
     
-    // --- ЗАВИСИМОСТЬ ДЛЯ ТРИАНГУЛЯЦИИ ---
+    // Gradle теперь будет искать эту зависимость в mavenCentral()
     implementation 'io.github.jdiemke:delaunator-java:1.0.3'
 }
 
