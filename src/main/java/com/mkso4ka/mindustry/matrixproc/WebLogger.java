@@ -9,7 +9,7 @@ import arc.scene.ui.CheckBox;
 import arc.scene.ui.Slider;
 import arc.util.Log;
 import arc.util.serialization.Json;
-import arc.util.serialization.JsonWriter; // Импортируем JsonWriter
+import arc.util.serialization.JsonWriter; // Убедитесь, что этот импорт на месте
 import com.mkso4ka.mindustry.matrixproc.debug.SchematicData;
 import fi.iki.elonen.NanoHTTPD;
 import mindustry.Vars;
@@ -45,38 +45,53 @@ public class WebLogger extends NanoHTTPD {
         String uri = session.getUri();
         Method method = session.getMethod();
 
+        // --- ГЛАВНОЕ ИЗМЕНЕНИЕ: Добавляем CORS заголовки ---
+        // Это позволит веб-страницам (если вы захотите сделать более сложный отладчик)
+        // без проблем обращаться к вашему API.
+        Response.IStatus status = Response.Status.OK;
+        String mimeType = "text/plain";
+        String content = "Not Found";
+
         if ("/".equals(uri)) {
-            return newFixedLengthResponse(Response.Status.OK, "text/html", getMainPageHtml());
-        }
-        if ("/debug".equals(uri)) {
-            return newFixedLengthResponse(Response.Status.OK, "text/html", getDebugPageHtml());
-        }
-        if ("/logs".equals(uri)) {
+            mimeType = "text/html";
+            content = getMainPageHtml();
+        } else if ("/debug".equals(uri)) {
+            mimeType = "text/html";
+            content = getDebugPageHtml();
+        } else if ("/logs".equals(uri)) {
             if (Method.GET.equals(method)) {
-                String response;
-                synchronized (logs) { response = String.join("\n", logs); }
-                return newFixedLengthResponse(Response.Status.OK, "text/plain", response);
+                synchronized (logs) {
+                    content = String.join("\n", logs);
+                }
             } else if (Method.DELETE.equals(method)) {
-                synchronized (logs) { logs.clear(); }
-                return newFixedLengthResponse(Response.Status.OK, "text/plain", "Logs cleared.");
+                synchronized (logs) {
+                    logs.clear();
+                }
+                content = "Logs cleared.";
             }
-        }
-        if (uri.startsWith("/debug/image/")) {
+        } else if (uri.startsWith("/debug/image/")) {
             String imageName = uri.substring("/debug/image/".length());
             byte[] imageData = debugImages.get(imageName);
             if (imageData != null) {
-                return newFixedLengthResponse(Response.Status.OK, "image/png", new ByteArrayInputStream(imageData), imageData.length);
+                Response res = newFixedLengthResponse(Response.Status.OK, "image/png", new ByteArrayInputStream(imageData), imageData.length);
+                res.addHeader("Access-Control-Allow-Origin", "*");
+                return res;
+            } else {
+                status = Response.Status.NOT_FOUND;
             }
-        }
-        if ("/debug/list".equals(uri)) {
-            String json = "[\"" + String.join("\",\"", debugImages.keySet()) + "\"]";
-            return newFixedLengthResponse(Response.Status.OK, "application/json", json);
-        }
-        if ("/api/schematic-data".equals(session.getUri())) {
-            return newFixedLengthResponse(Response.Status.OK, "application/json", latestSchematicJson);
+        } else if ("/debug/list".equals(uri)) {
+            mimeType = "application/json";
+            content = "[\"" + String.join("\",\"", debugImages.keySet()) + "\"]";
+        } else if ("/api/schematic-data".equals(session.getUri())) {
+            mimeType = "application/json";
+            content = latestSchematicJson;
+        } else {
+            status = Response.Status.NOT_FOUND;
         }
 
-        return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not Found");
+        Response res = newFixedLengthResponse(status, mimeType, content);
+        res.addHeader("Access-Control-Allow-Origin", "*"); // Разрешаем кросс-доменные запросы
+        return res;
     }
 
     private static void log(String level, String text, Object... args) {
@@ -124,11 +139,13 @@ public class WebLogger extends NanoHTTPD {
     public static void logSchematicData(SchematicData data) {
         if (!ENABLE_WEB_LOGGER) return;
         Json json = new Json();
-        // --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
-        // Устанавливаем режим вывода, который соответствует стандарту JSON (с кавычками для полей)
+        
+        // --- ЭТО КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ---
+        // Устанавливаем режим вывода, который соответствует стандарту JSON (с кавычками для полей).
+        // Это делает JSON совместимым с Python и другими стандартными парсерами.
         json.setOutputType(JsonWriter.OutputType.json);
-        // ---------------------------
-        latestSchematicJson = json.toJson(data);
+        
+        latestSchematicJson = json.prettyPrint(data); // Используем prettyPrint для читаемости при отладке
         info("Schematic data updated for external debugger.");
     }
 
