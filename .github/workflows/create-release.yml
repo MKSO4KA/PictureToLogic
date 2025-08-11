@@ -18,11 +18,16 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      # --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
-      # Этот шаг выполняется всегда и гарантирует, что папка для артефактов существует.
+      # --- НОВЫЙ ШАГ: Читаем версию из gradle.properties ---
+      - name: Read mod version from gradle.properties
+        id: properties
+        uses: christian-draeger/read-properties@1.1.1
+        with:
+          path: './gradle.properties'
+          properties: 'modVersion'
+
       - name: Create Release Assets Directory
         run: mkdir -p ./release-assets
-      # ---------------------------
 
       - name: Download JAR artifact (only if build succeeded)
         if: ${{ github.event.workflow_run.conclusion == 'success' }}
@@ -35,11 +40,24 @@ jobs:
       - name: Create Source Code ZIP
         run: zip -r ./release-assets/source-code.zip . -x ".git/*" ".github/*" "build/*" ".gradle/*"
 
-      - name: Create/Update GitHub Release
+      - name: Create GitHub Release
+        id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.workflow_run.conclusion == 'success' && 'latest' || format('failed-{0}', github.event.workflow_run.id) }}
-          name: ${{ github.event.workflow_run.conclusion == 'success' && 'Latest Build' || format('Build Failed - Run {0}', github.event.workflow_run.id) }}
-          body: "Автоматическая сборка мода. Статус: ${{ github.event.workflow_run.conclusion }}"
-          draft: ${{ github.event.workflow_run.conclusion != 'success' }}
+          # ИСПОЛЬЗУЕМ ВЕРСИЮ ИЗ ФАЙЛА
+          tag_name: ${{ github.event.workflow_run.conclusion == 'success' && format('v{0}-build.{1}', steps.properties.outputs.modVersion, github.event.workflow_run.run_number) || format('failed-build.{0}', github.event.workflow_run.run_number) }}
+          name: "v${{ steps.properties.outputs.modVersion }} Build ${{ github.event.workflow_run.run_number }} (${{ github.event.workflow_run.conclusion }})"
+          body: |
+            Automatic build from commit ${{ github.event.workflow_run.head_sha }}.
+            Build status: **${{ github.event.workflow_run.conclusion }}**
+          prerelease: ${{ github.event.workflow_run.conclusion != 'success' }}
+          make_latest: ${{ github.event.workflow_run.conclusion == 'success' }}
           files: ./release-assets/*
+
+      - name: Update 'latest' tag to point to this successful build
+        if: ${{ github.event.workflow_run.conclusion == 'success' }}
+        uses: rickstaa/action-create-tag@v1
+        with:
+          tag: "latest"
+          sha: ${{ github.event.workflow_run.head_sha }}
+          force_push_tag: true

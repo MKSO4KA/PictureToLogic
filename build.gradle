@@ -2,6 +2,16 @@ plugins {
     id 'java'
 }
 
+// --- Читаем версию из gradle.properties ---
+// Загружаем файл
+def props = new Properties()
+file("gradle.properties").withInputStream { props.load(it) }
+
+// Устанавливаем версию для проекта
+group = 'com.mkso4ka.mindustry.matrixproc'
+version = props.getProperty("modVersion", "1.0-SNAPSHOT")
+// -----------------------------------------
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(8)
@@ -13,8 +23,6 @@ ext {
     isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
 }
 
-group = 'com.mkso4ka.mindustry.matrixproc'
-version = '1.0-SNAPSHOT'
 sourceCompatibility = 1.8
 
 repositories {
