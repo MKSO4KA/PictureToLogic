@@ -30,16 +30,13 @@ public class ImageProcessor {
         this.height = pixmap.getHeight();
     }
 
-    public ProcessingSteps process(double tolerance, float luminanceWeight, int diffusionIterations, float diffusionContrast) {
+    public ProcessingSteps process(double tolerance, int diffusionIterations, float diffusionContrast) {
         Pixmap filteredPixmap = (diffusionIterations > 0) ? applyAnisotropicDiffusion(originalPixmap, diffusionIterations, diffusionContrast) : originalPixmap;
-        Pixmap quantizedPixmap = (tolerance > 0) ? quantize(filteredPixmap, tolerance, luminanceWeight) : filteredPixmap;
+        Pixmap quantizedPixmap = (tolerance > 0) ? quantize(filteredPixmap, tolerance) : filteredPixmap;
         Map<Integer, List<Rect>> rects = groupOptimal(quantizedPixmap);
         return new ProcessingSteps(filteredPixmap, quantizedPixmap, rects);
     }
 
-    /**
-     * Применяет анизотропную диффузию для умного сглаживания, сохраняющего края.
-     */
     private Pixmap applyAnisotropicDiffusion(Pixmap source, int iterations, float k) {
         Pixmap current = new Pixmap(width, height);
         current.draw(source);
@@ -56,7 +53,6 @@ public class ImageProcessor {
                     float totalR = 0, totalG = 0, totalB = 0;
                     float totalWeight = 0;
 
-                    // Проходим по 8 соседям и центральному пикселю
                     for (int dy = -1; dy <= 1; dy++) {
                         for (int dx = -1; dx <= 1; dx++) {
                             int nx = x + dx;
@@ -67,9 +63,7 @@ public class ImageProcessor {
                                 int ng = (nc >> 16 & 0xff);
                                 int nb = (nc >> 8 & 0xff);
 
-                                // Градиент вычисляется по разнице яркости
                                 float gradient = Math.abs((r + g + b) - (nr + ng + nb)) / 3f;
-                                // Коэффициент проводимости (формула Перона-Малика)
                                 float weight = (float) Math.exp(-Math.pow(gradient / k, 2));
 
                                 totalR += nr * weight;
@@ -82,17 +76,16 @@ public class ImageProcessor {
                     int finalR = (int) (totalR / totalWeight);
                     int finalG = (int) (totalG / totalWeight);
                     int finalB = (int) (totalB / totalWeight);
-                    // Сохраняем альфа-канал исходного пикселя
                     next.set(x, y, (finalR << 24) | (finalG << 16) | (finalB << 8) | (c & 0xff));
                 }
             }
-            current.draw(next); // Копируем результат для следующей итерации
+            current.draw(next);
         }
         WebLogger.info("Anisotropic diffusion applied. Iterations: %d, K: %.1f", iterations, k);
         return current;
     }
 
-    private Pixmap quantize(Pixmap source, double tolerance, float luminanceWeight) {
+    private Pixmap quantize(Pixmap source, double tolerance) {
         Pixmap quantizedPixmap = new Pixmap(width, height);
         List<Integer> palette = new ArrayList<>();
         Map<Integer, double[]> labCache = new HashMap<>();
@@ -109,7 +102,7 @@ public class ImageProcessor {
                 double minDeltaE = Double.MAX_VALUE;
                 for (Integer paletteColor : palette) {
                     double[] labPalette = labCache.computeIfAbsent(paletteColor, ColorUtils::argbToLab);
-                    double deltaE = ColorUtils.deltaE2000(labOriginal, labPalette, luminanceWeight);
+                    double deltaE = ColorUtils.deltaE2000(labOriginal, labPalette);
                     if (deltaE < minDeltaE) {
                         minDeltaE = deltaE;
                         bestMatch = paletteColor;

@@ -17,8 +17,8 @@ public class ModUI {
 
     private static LogicDisplay selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay;
 
-    private static Slider xSlider, ySlider, toleranceSlider, luminanceSlider, instructionsSlider, diffusionIterSlider, diffusionKSlider;
-    private static Label xLabel, yLabel, toleranceLabel, luminanceLabel, instructionsLabel, diffusionIterLabel, diffusionKLabel;
+    private static Slider xSlider, ySlider, toleranceSlider, instructionsSlider, diffusionIterSlider, diffusionKSlider;
+    private static Label xLabel, yLabel, toleranceLabel, instructionsLabel, diffusionIterLabel, diffusionKLabel;
     private static Table previewTable;
 
     public static void build() {
@@ -69,19 +69,12 @@ public class ModUI {
         leftPanel.add(diffusionKSlider).width(200f).pad(5);
         leftPanel.add(diffusionKLabel).row();
 
-        toleranceSlider = WebLogger.logChange(new Slider(0, 50, 1, false), "Color Tolerance");
-        toleranceSlider.setValue(10);
-        toleranceLabel = new Label("10.0");
+        toleranceSlider = WebLogger.logChange(new Slider(0, 3, 0.1f, false), "Color Tolerance");
+        toleranceSlider.setValue(1.5f);
+        toleranceLabel = new Label("1.5");
         leftPanel.add("Допуск цвета (Delta E):");
         leftPanel.add(toleranceSlider).width(200f).pad(5);
         leftPanel.add(toleranceLabel).row();
-
-        luminanceSlider = WebLogger.logChange(new Slider(0, 3, 0.1f, false), "Luminance Weight");
-        luminanceSlider.setValue(1);
-        luminanceLabel = new Label("1.0");
-        leftPanel.add("Вес яркости (L*):");
-        leftPanel.add(luminanceSlider).width(200f).pad(5);
-        leftPanel.add(luminanceLabel).row();
 
         leftPanel.add("[accent]3. Настройки вывода[]").colspan(3).padTop(15).row();
         instructionsSlider = WebLogger.logChange(new Slider(100, 1000, 100, false), "Max Instructions");
@@ -117,9 +110,7 @@ public class ModUI {
 
         Table bottomPanel = new Table();
         if (WebLogger.ENABLE_WEB_LOGGER) {
-            bottomPanel.button("Открыть панель отладки", Icon.zoom, () -> {
-                Core.app.openURI("http://localhost:8080/debug");
-            }).growX();
+            bottomPanel.button("Открыть панель отладки", Icon.zoom, () -> Core.app.openURI("http://localhost:8080/debug")).growX();
         }
         content.add(bottomPanel).growX().padTop(15).row();
 
@@ -136,7 +127,6 @@ public class ModUI {
         xSlider.changed(() -> { xLabel.setText(String.valueOf((int)xSlider.getValue())); updatePreview(); });
         ySlider.changed(() -> { yLabel.setText(String.valueOf((int)ySlider.getValue())); updatePreview(); });
         toleranceSlider.changed(() -> toleranceLabel.setText(String.format("%.1f", toleranceSlider.getValue())));
-        luminanceSlider.changed(() -> luminanceLabel.setText(String.format("%.1f", luminanceSlider.getValue())));
         instructionsSlider.changed(() -> instructionsLabel.setText(String.valueOf((int)instructionsSlider.getValue())));
         diffusionIterSlider.changed(() -> diffusionIterLabel.setText(String.valueOf((int)diffusionIterSlider.getValue())));
         diffusionKSlider.changed(() -> diffusionKLabel.setText(String.format("%.1f", diffusionKSlider.getValue())));
@@ -165,7 +155,6 @@ public class ModUI {
         WebLogger.info("Grid: %dx%d", (int)xSlider.getValue(), (int)ySlider.getValue());
         WebLogger.info("Display Type: %s", selectedDisplay.name);
         WebLogger.info("Color Tolerance (Delta E): %.1f", toleranceSlider.getValue());
-        WebLogger.info("Luminance Weight: %.1f", luminanceSlider.getValue());
         WebLogger.info("Max Instructions (User): %d", (int)instructionsSlider.getValue());
         WebLogger.info("Diffusion Iterations: %d", (int)diffusionIterSlider.getValue());
         WebLogger.info("Diffusion K-value: %.1f", diffusionKSlider.getValue());
@@ -176,13 +165,12 @@ public class ModUI {
                 int displaysX = (int) xSlider.getValue();
                 int displaysY = (int) ySlider.getValue();
                 double tolerance = toleranceSlider.getValue();
-                float luminanceWeight = luminanceSlider.getValue();
                 int maxInstructions = (int)instructionsSlider.getValue() - 11;
                 int diffusionIterations = (int)diffusionIterSlider.getValue();
                 float diffusionContrast = diffusionKSlider.getValue();
 
                 LogicCore logic = new LogicCore();
-                result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay, tolerance, luminanceWeight, maxInstructions, diffusionIterations, diffusionContrast);
+                result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay, tolerance, maxInstructions, diffusionIterations, diffusionContrast);
             } catch (Exception e) {
                 WebLogger.err("Критическая ошибка при создании чертежа!", e);
             } finally {

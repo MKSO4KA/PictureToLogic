@@ -3,7 +3,6 @@ package com.mkso4ka.mindustry.matrixproc;
 public class ColorUtils {
 
     public static double[] argbToLab(int argb) {
-        // Mindustry Pixmap.get() возвращает RGBA8888, а не ARGB
         int r = (argb >> 24) & 0xFF;
         int g = (argb >> 16) & 0xFF;
         int b = (argb >> 8) & 0xFF;
@@ -38,7 +37,7 @@ public class ColorUtils {
         return new double[]{L, a, b_};
     }
 
-    public static double deltaE2000(double[] lab1, double[] lab2, float kL) {
+    public static double deltaE2000(double[] lab1, double[] lab2) {
         double L1 = lab1[0];
         double a1 = lab1[1];
         double b1 = lab1[2];
@@ -113,7 +112,7 @@ public class ColorUtils {
         double RT = -2 * Math.sqrt(Math.pow(avgC_prime, 7.0) / (Math.pow(avgC_prime, 7.0) + Math.pow(25.0, 7.0))) *
                 Math.sin(Math.toRadians(60 * Math.exp(-Math.pow((avgh_prime - 275) / 25.0, 2))));
 
-        double termL = deltaL_prime / (kL * SL);
+        double termL = deltaL_prime / SL;
         double termC = deltaC_prime / SC;
         double termH = deltaH_prime / SH;
 
