@@ -22,17 +22,17 @@ jobs:
         run: mkdir -p ./release-assets
 
       # --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
-      # Используем официальный action для скачивания артефактов
+      # Используем action, который умеет скачивать артефакты из ДРУГИХ сборок
       - name: Download JAR artifact (only if build succeeded)
         if: ${{ github.event.workflow_run.conclusion == 'success' }}
-        uses: actions/download-artifact@v4
+        uses: dawidd6/action-download-artifact@v3
         with:
-          # Указываем имя артефакта, как в build-mod.yml
+          # Указываем ID сборки, из которой нужно скачать
+          run_id: ${{ github.event.workflow_run.id }}
+          # Имя артефакта, как в build-mod.yml
           name: PictureToLogicMod
           # Указываем, куда его положить
           path: ./release-assets
-          # Указываем ID сборки, из которой нужно скачать
-          run-id: ${{ github.event.workflow_run.id }}
 
       - name: Create Source Code ZIP
         run: zip -r ./release-assets/source-code.zip . -x ".git/*" ".github/*" "build/*" ".gradle/*"
