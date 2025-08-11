@@ -142,8 +142,23 @@ public class LogicCore {
         }
 
         for (DisplayInfo display : displays) {
+            // --- НАЧАЛО ИСПРАВЛЕНИЯ: ВОЗВРАЩАЕМ ВАШ КОД ---
+            // Я был неправ, удалив это. Этот сдвиг необходим для центрирования
+            // мультиблочных структур в схематике.
             short finalX = (short)display.bottomLeft.x;
             short finalY = (short)display.bottomLeft.y;
+
+            if (displayBlock.size == 6) {
+                finalX += 2;
+                finalY += 2;
+            }
+            else if (displayBlock.size == 3)
+            {
+                finalX += 1;
+                finalY += 1;
+            }
+            // --- КОНЕЦ ИСПРАВЛЕНИЯ ---
+
             tiles.add(new Stile(displayBlock, finalX, finalY, null, (byte) 0));
         }
         
@@ -159,18 +174,15 @@ public class LogicCore {
             data.displays = new ArrayList<>();
             data.processors = new ArrayList<>();
 
-            // --- НАЧАЛО ИСПРАВЛЕНИЯ ---
-            // В этом цикле мы заполняем данные для API.
-            // Нужно убедиться, что поле 'id' присваивается.
+            // Оставляем исправление для JSON API
             for (DisplayInfo display : displays) {
                 DisplayData dd = new DisplayData();
-                dd.id = display.id; // <--- ЭТА СТРОКА ДОБАВЛЕНА/ИСПРАВЛЕНА
+                dd.id = display.id; // Это поле было необходимо для Python-скрипта
                 dd.x = display.bottomLeft.x;
                 dd.y = display.bottomLeft.y;
                 dd.size = displayBlock.size;
                 data.displays.add(dd);
             }
-            // --- КОНЕЦ ИСПРАВЛЕНИЯ ---
 
             for (int row = 0; row < data.height; row++) {
                 for (int col = 0; col < data.width; col++) {
