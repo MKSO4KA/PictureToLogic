@@ -18,8 +18,8 @@ public class ModUI {
     private static LogicDisplay selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay;
     private static boolean showDebug = true;
 
-    private static Slider xSlider, ySlider, toleranceSlider, instructionsSlider, filterSlider;
-    private static Label xLabel, yLabel, toleranceLabel, instructionsLabel, filterLabel;
+    private static Slider xSlider, ySlider, toleranceSlider, luminanceSlider, instructionsSlider, diffusionIterSlider, diffusionKSlider;
+    private static Label xLabel, yLabel, toleranceLabel, luminanceLabel, instructionsLabel, diffusionIterLabel, diffusionKLabel;
     private static Table previewTable;
 
     public static void build() {
@@ -38,96 +38,98 @@ public class ModUI {
         dialog.addCloseButton();
 
         Table content = dialog.cont;
-        content.defaults().pad(8);
+        content.defaults().pad(4);
 
-        Table topPanel = new Table();
-        Table sliders = new Table();
-        sliders.defaults().pad(2).left();
+        Table mainTable = new Table();
+        Table leftPanel = new Table();
+        leftPanel.defaults().pad(2).left();
 
+        // --- Секция 1: Сетка ---
+        leftPanel.add("[accent]1. Настройки сетки[]").colspan(3).row();
         xSlider = WebLogger.logChange(new Slider(1, 10, 1, false), "Displays X");
         ySlider = WebLogger.logChange(new Slider(1, 10, 1, false), "Displays Y");
-        xLabel = new Label("1");
-        yLabel = new Label("1");
+        xLabel = new Label("1"); yLabel = new Label("1");
+        leftPanel.add("Дисплеев по X:");
+        leftPanel.add(xSlider).width(200f).pad(5);
+        leftPanel.add(xLabel).row();
+        leftPanel.add("Дисплеев по Y:");
+        leftPanel.add(ySlider).width(200f).pad(5);
+        leftPanel.add(yLabel).row();
 
-        sliders.add("Дисплеев по X:");
-        sliders.add(xSlider).width(200f).padLeft(10).padRight(10);
-        sliders.add(xLabel);
-        sliders.row();
+        // --- Секция 2: Оптимизация изображения ---
+        leftPanel.add("[accent]2. Оптимизация изображения[]").colspan(3).padTop(15).row();
+        diffusionIterSlider = WebLogger.logChange(new Slider(0, 10, 1, false), "Diffusion Iterations");
+        diffusionIterSlider.setValue(5);
+        diffusionIterLabel = new Label("5");
+        leftPanel.add("Сила сглаживания:");
+        leftPanel.add(diffusionIterSlider).width(200f).pad(5);
+        leftPanel.add(diffusionIterLabel).row();
 
-        sliders.add("Дисплеев по Y:");
-        sliders.add(ySlider).width(200f).padLeft(10).padRight(10);
-        sliders.add(yLabel);
-        sliders.row();
+        diffusionKSlider = WebLogger.logChange(new Slider(1, 25, 0.5f, false), "Edge Threshold");
+        diffusionKSlider.setValue(10);
+        diffusionKLabel = new Label("10.0");
+        leftPanel.add("Сохранение краев:");
+        leftPanel.add(diffusionKSlider).width(200f).pad(5);
+        leftPanel.add(diffusionKLabel).row();
 
         toleranceSlider = WebLogger.logChange(new Slider(0, 50, 1, false), "Color Tolerance");
         toleranceSlider.setValue(10);
         toleranceLabel = new Label("10.0");
-        sliders.add("Допуск цвета:").padTop(10);
-        sliders.add(toleranceSlider).width(200f).padLeft(10).padRight(10).padTop(10);
-        sliders.add(toleranceLabel).padTop(10);
-        sliders.row();
+        leftPanel.add("Допуск цвета (Delta E):");
+        leftPanel.add(toleranceSlider).width(200f).pad(5);
+        leftPanel.add(toleranceLabel).row();
 
+        luminanceSlider = WebLogger.logChange(new Slider(0, 3, 0.1f, false), "Luminance Weight");
+        luminanceSlider.setValue(1);
+        luminanceLabel = new Label("1.0");
+        leftPanel.add("Вес яркости (L*):");
+        leftPanel.add(luminanceSlider).width(200f).pad(5);
+        leftPanel.add(luminanceLabel).row();
+
+        // --- Секция 3: Настройки вывода ---
+        leftPanel.add("[accent]3. Настройки вывода[]").colspan(3).padTop(15).row();
         instructionsSlider = WebLogger.logChange(new Slider(100, 1000, 100, false), "Max Instructions");
         instructionsSlider.setValue(1000);
         instructionsLabel = new Label("1000");
-        sliders.add("Макс. инструкций:").padTop(10);
-        sliders.add(instructionsSlider).width(200f).padLeft(10).padRight(10).padTop(10);
-        sliders.add(instructionsLabel).padTop(10);
-        sliders.row();
+        leftPanel.add("Макс. инструкций:");
+        leftPanel.add(instructionsSlider).width(200f).pad(5);
+        leftPanel.add(instructionsLabel).row();
 
-        filterSlider = WebLogger.logChange(new Slider(0, 2, 1, false), "Noise Filter");
-        filterSlider.setValue(1);
-        filterLabel = new Label("3x3");
-        sliders.add("Фильтрация шума:").padTop(10);
-        sliders.add(filterSlider).width(200f).padLeft(10).padRight(10).padTop(10);
-        sliders.add(filterLabel).padTop(10);
-
+        // --- Правая панель ---
+        Table rightPanel = new Table();
         previewTable = new Table();
         previewTable.setBackground(Tex.buttonDown);
-
-        topPanel.add(sliders);
-        topPanel.add(previewTable).padLeft(20);
-        content.add(topPanel).row();
-
-        content.add("Тип дисплея:").left().padTop(20).row();
+        rightPanel.add(previewTable).size(150).padBottom(10).row();
+        
         Table displaySelector = new Table();
         ButtonGroup<TextButton> group = new ButtonGroup<>();
         group.setMinCheckCount(1);
-
-        TextButton logicDisplayButton = WebLogger.logClick(
-            new TextButton("Логический дисплей (3x3)", Styles.togglet),
-            "Select Logic Display (3x3)"
-        );
+        TextButton logicDisplayButton = WebLogger.logClick(new TextButton("3x3", Styles.togglet), "Select 3x3");
         logicDisplayButton.clicked(() -> selectedDisplay = (LogicDisplay) Blocks.logicDisplay);
-        
-        TextButton largeLogicDisplayButton = WebLogger.logClick(
-            new TextButton("Большой дисплей (6x6)", Styles.togglet),
-            "Select Large Logic Display (6x6)"
-        );
+        TextButton largeLogicDisplayButton = WebLogger.logClick(new TextButton("6x6", Styles.togglet), "Select 6x6");
         largeLogicDisplayButton.clicked(() -> selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay);
-        
         group.add(logicDisplayButton, largeLogicDisplayButton);
-        
-        if (selectedDisplay == Blocks.largeLogicDisplay) {
-            largeLogicDisplayButton.setChecked(true);
-        } else {
-            logicDisplayButton.setChecked(true);
-        }
+        if (selectedDisplay == Blocks.largeLogicDisplay) largeLogicDisplayButton.setChecked(true);
+        else logicDisplayButton.setChecked(true);
+        displaySelector.add(logicDisplayButton).size(70, 60);
+        displaySelector.add(largeLogicDisplayButton).size(70, 60).padLeft(10);
+        rightPanel.add("Тип дисплея:").row();
+        rightPanel.add(displaySelector).row();
 
-        displaySelector.add(logicDisplayButton).size(240, 60);
-        displaySelector.add(largeLogicDisplayButton).size(240, 60).padLeft(10);
-        content.add(displaySelector).row();
+        mainTable.add(leftPanel);
+        mainTable.add(rightPanel).padLeft(20);
+        content.add(mainTable).row();
 
+        // --- Нижняя панель ---
+        Table bottomPanel = new Table();
         if (WebLogger.ENABLE_WEB_LOGGER) {
-            content.button("Открыть визуальный отладчик", Icon.zoom, () -> {
-                Core.app.openURI("http://localhost:8080/debug");
-            }).left().padTop(10).row();
+            bottomPanel.button("Визуальный отладчик", Icon.zoom, () -> Core.app.openURI("http://localhost:8080/debug")).left();
         }
-
-        CheckBox debugCheckBox = new CheckBox("Показывать отладочное окно");
+        CheckBox debugCheckBox = new CheckBox("Отладочное окно");
         debugCheckBox.setChecked(showDebug);
         debugCheckBox.changed(() -> showDebug = debugCheckBox.isChecked());
-        content.add(WebLogger.logToggle(debugCheckBox, "Show Debug Window")).left().padTop(10).row();
+        bottomPanel.add(WebLogger.logToggle(debugCheckBox, "Show Debug Window")).expandX().right();
+        content.add(bottomPanel).growX().padTop(15).row();
 
         Runnable fileChooserAction = () -> WebLogger.logFileChooser(file -> {
             if (file != null) {
@@ -137,29 +139,16 @@ public class ModUI {
         });
         Cell<TextButton> selectFileCell = content.button("Выбрать и создать чертеж", Icon.file, fileChooserAction);
         WebLogger.logClick(selectFileCell.get(), "Select Image and Create");
-        selectFileCell.padTop(20).growX().height(60);
+        selectFileCell.padTop(10).growX().height(60);
 
-        xSlider.changed(() -> {
-            xLabel.setText(String.valueOf((int)xSlider.getValue()));
-            updatePreview();
-        });
-        ySlider.changed(() -> {
-            yLabel.setText(String.valueOf((int)ySlider.getValue()));
-            updatePreview();
-        });
-        toleranceSlider.changed(() -> {
-            toleranceLabel.setText(String.format("%.1f", toleranceSlider.getValue()));
-        });
-        instructionsSlider.changed(() -> {
-            instructionsLabel.setText(String.valueOf((int)instructionsSlider.getValue()));
-        });
-        filterSlider.changed(() -> {
-            int value = (int)filterSlider.getValue();
-            String text = "Выкл.";
-            if (value == 1) text = "3x3";
-            if (value == 2) text = "5x5";
-            filterLabel.setText(text);
-        });
+        // --- Слушатели ---
+        xSlider.changed(() -> { xLabel.setText(String.valueOf((int)xSlider.getValue())); updatePreview(); });
+        ySlider.changed(() -> { yLabel.setText(String.valueOf((int)ySlider.getValue())); updatePreview(); });
+        toleranceSlider.changed(() -> toleranceLabel.setText(String.format("%.1f", toleranceSlider.getValue())));
+        luminanceSlider.changed(() -> luminanceLabel.setText(String.format("%.1f", luminanceSlider.getValue())));
+        instructionsSlider.changed(() -> instructionsLabel.setText(String.valueOf((int)instructionsSlider.getValue())));
+        diffusionIterSlider.changed(() -> diffusionIterLabel.setText(String.valueOf((int)diffusionIterSlider.getValue())));
+        diffusionKSlider.changed(() -> diffusionKLabel.setText(String.format("%.1f", diffusionKSlider.getValue())));
         updatePreview();
 
         WebLogger.logShow(dialog, "Settings Dialog");
@@ -185,8 +174,10 @@ public class ModUI {
         WebLogger.info("Grid: %dx%d", (int)xSlider.getValue(), (int)ySlider.getValue());
         WebLogger.info("Display Type: %s", selectedDisplay.name);
         WebLogger.info("Color Tolerance (Delta E): %.1f", toleranceSlider.getValue());
+        WebLogger.info("Luminance Weight: %.1f", luminanceSlider.getValue());
         WebLogger.info("Max Instructions (User): %d", (int)instructionsSlider.getValue());
-        WebLogger.info("Noise Filter Strength: %d", (int)filterSlider.getValue());
+        WebLogger.info("Diffusion Iterations: %d", (int)diffusionIterSlider.getValue());
+        WebLogger.info("Diffusion K-value: %.1f", diffusionKSlider.getValue());
 
         new Thread(() -> {
             ProcessingResult result = null;
@@ -194,11 +185,13 @@ public class ModUI {
                 int displaysX = (int) xSlider.getValue();
                 int displaysY = (int) ySlider.getValue();
                 double tolerance = toleranceSlider.getValue();
+                float luminanceWeight = luminanceSlider.getValue();
                 int maxInstructions = (int)instructionsSlider.getValue() - 11;
-                int filterStrength = (int)filterSlider.getValue();
+                int diffusionIterations = (int)diffusionIterSlider.getValue();
+                float diffusionContrast = diffusionKSlider.getValue();
 
                 LogicCore logic = new LogicCore();
-                result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay, tolerance, maxInstructions, filterStrength);
+                result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay, tolerance, luminanceWeight, maxInstructions, diffusionIterations, diffusionContrast);
             } catch (Exception e) {
                 WebLogger.err("Критическая ошибка при создании чертежа!", e);
             } finally {

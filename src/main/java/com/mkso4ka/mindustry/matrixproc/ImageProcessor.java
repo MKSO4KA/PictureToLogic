@@ -3,7 +3,6 @@ package com.mkso4ka.mindustry.matrixproc;
 import arc.graphics.Color;
 import arc.graphics.Pixmap;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,69 +30,91 @@ public class ImageProcessor {
         this.height = pixmap.getHeight();
     }
 
-    public ProcessingSteps process(double tolerance, int filterStrength) {
-        Pixmap filteredPixmap = (filterStrength > 0) ? applyMedianFilter(originalPixmap, filterStrength) : originalPixmap;
-        // ИСПРАВЛЕНО: Передаем в quantize и отфильтрованное изображение, и допуск
-        Pixmap quantizedPixmap = (tolerance > 0) ? quantize(filteredPixmap, tolerance) : filteredPixmap;
+    public ProcessingSteps process(double tolerance, float luminanceWeight, int diffusionIterations, float diffusionContrast) {
+        Pixmap filteredPixmap = (diffusionIterations > 0) ? applyAnisotropicDiffusion(originalPixmap, diffusionIterations, diffusionContrast) : originalPixmap;
+        Pixmap quantizedPixmap = (tolerance > 0) ? quantize(filteredPixmap, tolerance, luminanceWeight) : filteredPixmap;
         Map<Integer, List<Rect>> rects = groupOptimal(quantizedPixmap);
         return new ProcessingSteps(filteredPixmap, quantizedPixmap, rects);
     }
 
-    private Pixmap applyMedianFilter(Pixmap source, int strength) {
-        Pixmap result = new Pixmap(width, height);
-        int size = strength * 2 + 1;
-        int[] window = new int[size * size];
+    /**
+     * Применяет анизотропную диффузию для умного сглаживания, сохраняющего края.
+     */
+    private Pixmap applyAnisotropicDiffusion(Pixmap source, int iterations, float k) {
+        Pixmap current = new Pixmap(width, height);
+        current.draw(source);
+        Pixmap next = new Pixmap(width, height);
 
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
-                int count = 0;
-                for (int j = -strength; j <= strength; j++) {
-                    for (int i = -strength; i <= strength; i++) {
-                        int currentX = x + i;
-                        int currentY = y + j;
-                        if (currentX >= 0 && currentX < width && currentY >= 0 && currentY < height) {
-                            window[count++] = source.get(currentX, currentY);
+        for (int i = 0; i < iterations; i++) {
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    int c = current.get(x, y);
+                    float r = (c >> 24 & 0xff);
+                    float g = (c >> 16 & 0xff);
+                    float b = (c >> 8 & 0xff);
+
+                    float totalR = 0, totalG = 0, totalB = 0;
+                    float totalWeight = 0;
+
+                    // Проходим по 8 соседям и центральному пикселю
+                    for (int dy = -1; dy <= 1; dy++) {
+                        for (int dx = -1; dx <= 1; dx++) {
+                            int nx = x + dx;
+                            int ny = y + dy;
+                            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                                int nc = current.get(nx, ny);
+                                int nr = (nc >> 24 & 0xff);
+                                int ng = (nc >> 16 & 0xff);
+                                int nb = (nc >> 8 & 0xff);
+
+                                // Градиент вычисляется по разнице яркости
+                                float gradient = Math.abs((r + g + b) - (nr + ng + nb)) / 3f;
+                                // Коэффициент проводимости (формула Перона-Малика)
+                                float weight = (float) Math.exp(-Math.pow(gradient / k, 2));
+
+                                totalR += nr * weight;
+                                totalG += ng * weight;
+                                totalB += nb * weight;
+                                totalWeight += weight;
+                            }
                         }
                     }
+                    int finalR = (int) (totalR / totalWeight);
+                    int finalG = (int) (totalG / totalWeight);
+                    int finalB = (int) (totalB / totalWeight);
+                    // Сохраняем альфа-канал исходного пикселя
+                    next.set(x, y, (finalR << 24) | (finalG << 16) | (finalB << 8) | (c & 0xff));
                 }
-                Arrays.sort(window, 0, count);
-                result.set(x, y, window[count / 2]);
             }
+            current.draw(next); // Копируем результат для следующей итерации
         }
-        WebLogger.info("Median filter applied with strength %d (%dx%d)", strength, size, size);
-        return result;
+        WebLogger.info("Anisotropic diffusion applied. Iterations: %d, K: %.1f", iterations, k);
+        return current;
     }
 
-    // ИСПРАВЛЕНО: Метод теперь принимает Pixmap для обработки
-    private Pixmap quantize(Pixmap source, double tolerance) {
+    private Pixmap quantize(Pixmap source, double tolerance, float luminanceWeight) {
         Pixmap quantizedPixmap = new Pixmap(width, height);
         List<Integer> palette = new ArrayList<>();
         Map<Integer, double[]> labCache = new HashMap<>();
 
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-                // ИСПРАВЛЕНО: Используем 'source', а не 'originalPixmap'
                 int originalColor = source.get(x, y);
-                
                 if ((originalColor & 0xff) == 0) {
                     quantizedPixmap.set(x, y, originalColor);
                     continue;
                 }
-
                 double[] labOriginal = labCache.computeIfAbsent(originalColor, ColorUtils::argbToLab);
-                
                 Integer bestMatch = null;
                 double minDeltaE = Double.MAX_VALUE;
-
                 for (Integer paletteColor : palette) {
                     double[] labPalette = labCache.computeIfAbsent(paletteColor, ColorUtils::argbToLab);
-                    double deltaE = ColorUtils.deltaE2000(labOriginal, labPalette);
+                    double deltaE = ColorUtils.deltaE2000(labOriginal, labPalette, luminanceWeight);
                     if (deltaE < minDeltaE) {
                         minDeltaE = deltaE;
                         bestMatch = paletteColor;
                     }
                 }
-
                 if (bestMatch != null && minDeltaE <= tolerance) {
                     quantizedPixmap.set(x, y, bestMatch);
                 } else {
@@ -102,7 +123,7 @@ public class ImageProcessor {
                 }
             }
         }
-        WebLogger.info("Color quantization complete. Original colors: %d -> Palette size: %d", labCache.size(), palette.size());
+        WebLogger.info("Color quantization complete. Palette size: %d", palette.size());
         return quantizedPixmap;
     }
 

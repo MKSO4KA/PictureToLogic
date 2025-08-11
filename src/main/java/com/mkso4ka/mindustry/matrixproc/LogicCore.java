@@ -25,7 +25,7 @@ public class LogicCore {
 
     private static final int BORDER_SIZE = 8;
 
-    public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, double tolerance, int maxInstructions, int filterStrength) {
+    public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, double tolerance, float luminanceWeight, int maxInstructions, int diffusionIterations, float diffusionContrast) {
         try {
             WebLogger.clearDebugImages();
 
@@ -59,7 +59,7 @@ public class LogicCore {
                     WebLogger.logImage(String.format("slice_%d_0_raw", displayIndex), finalSlice);
 
                     ImageProcessor processor = new ImageProcessor(finalSlice);
-                    ImageProcessor.ProcessingSteps steps = processor.process(tolerance, filterStrength);
+                    ImageProcessor.ProcessingSteps steps = processor.process(tolerance, luminanceWeight, diffusionIterations, diffusionContrast);
                     
                     WebLogger.logImage(String.format("slice_%d_1_filtered", displayIndex), steps.filteredPixmap);
                     WebLogger.logImage(String.format("slice_%d_2_quantized", displayIndex), steps.quantizedPixmap);

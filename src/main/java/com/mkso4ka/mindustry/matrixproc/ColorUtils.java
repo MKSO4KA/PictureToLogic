@@ -1,23 +1,16 @@
 package com.mkso4ka.mindustry.matrixproc;
 
-/**
- * Утилиты для работы с цветом.
- * Реализует преобразование RGB -> CIELAB и вычисление разницы Delta E 2000,
- * что является индустриальным стандартом для определения воспринимаемой разницы цветов.
- */
 public class ColorUtils {
 
-    // Преобразует ARGB (из Pixmap) в массив L*a*b*
     public static double[] argbToLab(int argb) {
-        int r = (argb >> 16) & 0xFF;
-        int g = (argb >> 8) & 0xFF;
-        int b = argb & 0xFF;
+        // Mindustry Pixmap.get() возвращает RGBA8888, а не ARGB
+        int r = (argb >> 24) & 0xFF;
+        int g = (argb >> 16) & 0xFF;
+        int b = (argb >> 8) & 0xFF;
         return rgbToLab(r, g, b);
     }
 
-    // Преобразует RGB в массив L*a*b*
     public static double[] rgbToLab(int r, int g, int b) {
-        // Сначала конвертируем RGB в XYZ
         double R = r / 255.0;
         double G = g / 255.0;
         double B = b / 255.0;
@@ -30,7 +23,6 @@ public class ColorUtils {
         double Y = R * 0.2126729 + G * 0.7151522 + B * 0.0721750;
         double Z = R * 0.0193339 + G * 0.1191920 + B * 0.9503041;
 
-        // Нормализуем XYZ относительно референсного белого D65
         X /= 0.95047;
         Y /= 1.00000;
         Z /= 1.08883;
@@ -46,10 +38,7 @@ public class ColorUtils {
         return new double[]{L, a, b_};
     }
 
-    /**
-     * Вычисляет разницу Delta E 2000 между двумя цветами в пространстве L*a*b*.
-     */
-    public static double deltaE2000(double[] lab1, double[] lab2) {
+    public static double deltaE2000(double[] lab1, double[] lab2, float kL) {
         double L1 = lab1[0];
         double a1 = lab1[1];
         double b1 = lab1[2];
@@ -124,7 +113,7 @@ public class ColorUtils {
         double RT = -2 * Math.sqrt(Math.pow(avgC_prime, 7.0) / (Math.pow(avgC_prime, 7.0) + Math.pow(25.0, 7.0))) *
                 Math.sin(Math.toRadians(60 * Math.exp(-Math.pow((avgh_prime - 275) / 25.0, 2))));
 
-        double termL = deltaL_prime / SL;
+        double termL = deltaL_prime / (kL * SL);
         double termC = deltaC_prime / SC;
         double termH = deltaH_prime / SH;
 
