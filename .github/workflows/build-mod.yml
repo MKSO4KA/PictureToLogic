@@ -25,15 +25,15 @@ jobs:
       - name: Grant execute permission to gradlew
         run: chmod +x gradlew
 
-      # ИЗМЕНЕНО: Выполняем новую задачу сборки из модуля 'core'
+      # ИЗМЕНЕНО: Выполняем новую прокси-задачу из корневого проекта
       - name: Build Universal Jar with Gradle
-        run: ./gradlew :core:deploy
+        run: ./gradlew deploy
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: PictureToLogicMod
-          # ИЗМЕНЕНО: Указываем новый путь к финальному JAR-файлу
+          # Путь к JAR-файлу остается прежним, так как задача buildUniversalJar кладет его туда
           path: core/build/libs/*.jar
           if-no-files-found: error
           retention-days: 7

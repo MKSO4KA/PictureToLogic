@@ -3,3 +3,12 @@ plugins {
     id 'com.android.application' version '8.2.1' apply false
     id 'com.android.library' version '8.2.1' apply false
 }
+
+// --- НОВЫЙ БЛОК ---
+// Эта задача находится в корневом проекте.
+// Она ничего не делает сама, а просто говорит: "Запусти задачу buildUniversalJar из модуля core".
+// Это самый надежный способ вызова.
+task deploy(dependsOn: ':core:buildUniversalJar') {
+    group = 'build'
+    description = 'Builds the universal JAR for the mod.'
+}
