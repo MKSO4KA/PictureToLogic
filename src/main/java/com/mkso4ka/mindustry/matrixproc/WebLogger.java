@@ -1,6 +1,5 @@
 package com.mkso4ka.mindustry.matrixproc;
 
-import arc.Core;
 import arc.files.Fi;
 import arc.func.Cons;
 import arc.graphics.Pixmap;
@@ -10,6 +9,7 @@ import arc.scene.ui.CheckBox;
 import arc.scene.ui.Slider;
 import arc.util.Log;
 import arc.util.serialization.Json;
+import arc.util.serialization.JsonWriter; // Импортируем JsonWriter
 import com.mkso4ka.mindustry.matrixproc.debug.SchematicData;
 import fi.iki.elonen.NanoHTTPD;
 import mindustry.Vars;
@@ -124,6 +124,10 @@ public class WebLogger extends NanoHTTPD {
     public static void logSchematicData(SchematicData data) {
         if (!ENABLE_WEB_LOGGER) return;
         Json json = new Json();
+        // --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
+        // Устанавливаем режим вывода, который соответствует стандарту JSON (с кавычками для полей)
+        json.setOutputType(JsonWriter.OutputType.json);
+        // ---------------------------
         latestSchematicJson = json.toJson(data);
         info("Schematic data updated for external debugger.");
     }
