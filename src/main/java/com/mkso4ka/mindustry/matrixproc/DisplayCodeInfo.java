@@ -3,8 +3,8 @@ package com.mkso4ka.mindustry.matrixproc;
 import arc.util.serialization.Json;
 import arc.util.serialization.JsonValue;
 
-// ИСПРАВЛЕНИЕ: Реализуем Json.Serializable для полного контроля над выводом
-public class DisplayCodeInfo implements Json.Serializable {
+// ИСПРАВЛЕНИЕ: Правильное имя интерфейса - Json.JsonSerializable
+public class DisplayCodeInfo implements Json.JsonSerializable {
     public int displayId;
     public String fullCode;
     public int displaySizePixels;
