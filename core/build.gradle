@@ -1,7 +1,6 @@
 // core/build.gradle
 plugins {
     id 'com.android.library'
-    // УБРАНО: id 'java-library' - он конфликтует с Android плагином
 }
 
 group = 'com.mkso4ka.mindustry.matrixproc'
@@ -27,9 +26,6 @@ android {
     }
 }
 
-// УБРАНО: Секция repositories перенесена в settings.gradle
-// repositories { ... }
-
 ext{
     mindustryVersion = "v147"
 }
@@ -41,14 +37,20 @@ dependencies {
     implementation 'org.nanohttpd:nanohttpd:2.3.1'
 }
 
+// --- ИСПРАВЛЕННАЯ ЗАДАЧА DEPLOY ---
 task deploy(type: Jar) {
     archiveFileName = "PictureToLogic.jar"
     
-    from sourceSets.main.resources
-    from sourceSets.main.java.classesDirectory
+    // 1. Берем .class файлы и ресурсы (mod.hjson) из вывода стандартной задачи 'jar'.
+    // Это самый надежный способ, который работает с Android-плагином.
+    from(zipTree(project.tasks.getByName("jar").outputs.files.singleFile))
+
+    // 2. Включаем классы всех 'implementation' зависимостей (NanoHTTPD)
     from {
         configurations.implementation.collect { it.isDirectory() ? it : zipTree(it) }
     }
+
+    // 3. Включаем классы, обработанные для Android (.dex)
     from(zipTree(project.tasks.getByName("bundleReleaseAar").outputs.files.singleFile)) {
         include "classes.jar"
         rename 'classes.jar', 'classes.dex'
