@@ -25,6 +25,7 @@ public class LogicCore {
     public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, double tolerance, int maxInstructions, int diffusionIterations, float diffusionContrast) {
         try {
             WebLogger.clearDebugImages();
+            WebLogger.clearProcessorCodeLogs(); // Очищаем логи процессоров перед новым запуском
 
             int displaySize = displayBlock.size;
             int displayPixelSize = getDisplayPixelSize(displaySize);
@@ -56,9 +57,17 @@ public class LogicCore {
                     Pixmap finalSlice = new Pixmap(sliceWidth, sliceHeight);
                     finalSlice.draw(scaledMasterPixmap, subX, subY, sliceWidth, sliceHeight, 0, 0, sliceWidth, sliceHeight);
                     
+                    WebLogger.logImage(String.format("slice_%d_0_raw", displayIndex), finalSlice);
+
                     ImageProcessor processor = new ImageProcessor(finalSlice);
                     ImageProcessor.ProcessingSteps steps = processor.process(tolerance, diffusionIterations, diffusionContrast);
                     
+                    WebLogger.logImage(String.format("slice_%d_1_filtered", displayIndex), steps.filteredPixmap);
+                    WebLogger.logImage(String.format("slice_%d_2_quantized", displayIndex), steps.quantizedPixmap);
+
+                    Pixmap rectsPixmap = ImageProcessor.drawRectsOnPixmap(steps.quantizedPixmap, steps.result);
+                    WebLogger.logImage(String.format("slice_%d_3_rects", displayIndex), rectsPixmap);
+
                     Map<Integer, List<Rect>> rects = steps.result;
                     int offsetX = (j > 0) ? BORDER_SIZE : 0;
                     int offsetY = (i > 0) ? BORDER_SIZE : 0;
@@ -68,7 +77,6 @@ public class LogicCore {
                     allCommands.forEach(cmd -> fullCodeBuilder.append(cmd).append("\n"));
                     finalCodesForApi.add(new DisplayCodeInfo(displayIndex, fullCodeBuilder.toString(), displayPixelSize));
 
-                    // --- УЛУЧШЕННАЯ ЛОГИКА РАЗДЕЛЕНИЯ КОДА ---
                     List<String> processorChunks = new ArrayList<>();
                     if (!allCommands.isEmpty()) {
                         List<String> currentChunk = new ArrayList<>();
@@ -78,32 +86,24 @@ public class LogicCore {
                             if (command.startsWith("draw color")) {
                                 activeColor = command;
                             }
-
-                            // Если в чанке еще нет команд, и есть активный цвет, добавляем его
                             if (currentChunk.isEmpty() && !activeColor.isEmpty()) {
                                 currentChunk.add(activeColor);
                             }
-                            
                             currentChunk.add(command);
-
-                            // Проверяем, не превышен ли лимит (maxInstructions уже уменьшен в ModUI)
                             if (currentChunk.size() >= maxInstructions) {
                                 processorChunks.add(String.join("\n", currentChunk));
                                 currentChunk.clear();
                             }
                         }
-                        // Добавляем последний оставшийся чанк
                         if (!currentChunk.isEmpty()) {
                             processorChunks.add(String.join("\n", currentChunk));
                         }
                     }
                     
-                    // Добавляем drawflush и сохраняем
                     for(String chunk : processorChunks){
                         codeMap.get(displayIndex).add(chunk + "\ndrawflush display1");
                     }
                     processorsPerDisplay[displayIndex] = processorChunks.size();
-                    // --- КОНЕЦ УЛУЧШЕННОЙ ЛОГИКИ ---
 
                     finalSlice.dispose();
                 }
@@ -147,8 +147,9 @@ public class LogicCore {
                         code = codesForDisplay.get(cell.processorIndex);
                     }
 
-                    // --- ДОБАВЛЯЕМ ПОДРОБНОЕ ЛОГИРОВАНИЕ КОДА ПРОЦЕССОРА ---
-                    WebLogger.info("[Processor Code] Display #%d / Proc #%d:\n---\n%s\n---", cell.ownerId, cell.processorIndex, code);
+                    // ИЗМЕНЕНИЕ: Отправляем код в отдельный логгер
+                    String logHeader = String.format("--- Display #%d / Processor #%d ---", cell.ownerId, cell.processorIndex);
+                    WebLogger.logProcessorCode(logHeader + "\n" + code);
 
                     LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
                     build.tile = new Tile(schemX, schemY);
@@ -170,7 +171,6 @@ public class LogicCore {
             tiles.add(new Stile(displayBlock, finalX, finalY, null, (byte) 0));
         }
         
-        // --- ДОБАВЛЯЕМ ЛОГИРОВАНИЕ ОБЩЕГО КОЛИЧЕСТВА ОБЪЕКТОВ ---
         WebLogger.info("[Schematic Stats] Total objects placed: %d (%d displays, %d processors)", displays.length + processorCount, displays.length, processorCount);
 
         StringMap tags = new StringMap();

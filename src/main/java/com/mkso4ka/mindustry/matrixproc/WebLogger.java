@@ -5,7 +5,6 @@ import arc.func.Cons;
 import arc.graphics.Pixmap;
 import arc.graphics.PixmapIO;
 import arc.scene.ui.Button;
-import arc.scene.ui.CheckBox;
 import arc.scene.ui.Slider;
 import arc.util.Log;
 import arc.util.serialization.Json;
@@ -29,6 +28,7 @@ public class WebLogger extends NanoHTTPD {
 
     private static final int PORT = 8080;
     private static final List<String> logs = new ArrayList<>();
+    private static final List<String> processorCodeLogs = new ArrayList<>(); // Новый список для кода процессоров
     private static WebLogger serverInstance;
     private static final SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm:ss");
 
@@ -46,31 +46,34 @@ public class WebLogger extends NanoHTTPD {
         if ("/".equals(uri)) {
             return newFixedLengthResponse(Response.Status.OK, "text/html", getMainPageHtml());
         }
-        
         if ("/debug".equals(uri)) {
             return newFixedLengthResponse(Response.Status.OK, "text/html", getDebugPageHtml());
         }
-        
         if ("/logs".equals(uri)) {
             return newFixedLengthResponse(Response.Status.OK, "text/html", getLogsPageHtml());
         }
+        if ("/processor-codes".equals(uri)) { // Новая страница
+            return newFixedLengthResponse(Response.Status.OK, "text/html", getProcessorCodesPageHtml());
+        }
 
+        // --- API-эндпоинты (отдают только данные, не HTML) ---
+        if ("/api/logs-text".equals(uri)) { // Новый эндпоинт для текста логов
+            String logContent;
+            synchronized (logs) { logContent = String.join("\n", logs); }
+            return newFixedLengthResponse(Response.Status.OK, "text/plain", logContent);
+        }
         if ("/download-logs".equals(uri)) {
             String logContent;
-            synchronized (logs) {
-                logContent = String.join("\n", logs);
-            }
+            synchronized (logs) { logContent = String.join("\n", logs); }
             Response res = newFixedLengthResponse(Response.Status.OK, "text/plain", logContent);
             res.addHeader("Content-Disposition", "attachment; filename=\"picturetologic.log\"");
             return res;
         }
-
         if ("/api/display-codes".equals(uri)) {
             Response res = newFixedLengthResponse(Response.Status.OK, "application/json", latestDisplayCodesJson);
             res.addHeader("Access-Control-Allow-Origin", "*");
             return res;
         }
-
         if (uri.startsWith("/debug/image/")) {
             String imageName = uri.substring("/debug/image/".length());
             byte[] imageData = debugImages.get(imageName);
@@ -92,6 +95,24 @@ public class WebLogger extends NanoHTTPD {
         json.setOutputType(JsonWriter.OutputType.json);
         latestDisplayCodesJson = json.toJson(codes);
         info("Display codes updated for external API. %d displays.", codes.size());
+    }
+
+    // Новый метод для логов кода процессоров
+    public static void logProcessorCode(String code) {
+        if (ENABLE_WEB_LOGGER && serverInstance != null) {
+            synchronized (processorCodeLogs) {
+                processorCodeLogs.add(code);
+            }
+        }
+    }
+    
+    // Новый метод для очистки логов кода процессоров
+    public static void clearProcessorCodeLogs() {
+        if (ENABLE_WEB_LOGGER && serverInstance != null) {
+            synchronized (processorCodeLogs) {
+                processorCodeLogs.clear();
+            }
+        }
     }
 
     private static void log(String level, String text, Object... args) {
@@ -163,9 +184,8 @@ public class WebLogger extends NanoHTTPD {
 
     public static Slider logChange(Slider slider, String name) {
         if (ENABLE_WEB_LOGGER) {
-            slider.changed(() -> info("UI Event: Slider '%s' set to %d", name, (int)slider.getValue()));
+            slider.changed(() -> info("UI Event: Slider '%s' set to %f", name, slider.getValue()));
         }
-        // --- ИСПРАВЛЕНИЕ: Возвращаем slider, а не button ---
         return slider;
     }
 
@@ -195,7 +215,7 @@ public class WebLogger extends NanoHTTPD {
     private String getStyle() {
         return "<style>" +
             "body{font-family:sans-serif;background-color:#2c2c2c;color:#e0e0e0; margin:20px;} " +
-            "a{color:#ffd06b; text-decoration:none;} h1,h2{border-bottom:1px solid #555; padding-bottom:5px;} " +
+            "a{color:#ffd06b; text-decoration:none;} h1,h2,h3{border-bottom:1px solid #555; padding-bottom:5px; margin-top:30px;} " +
             "button, .button{background-color:#4a4a4a; color:#e0e0e0; border:1px solid #666; padding:10px 15px; margin:5px; border-radius:5px; cursor:pointer; font-size:16px; display:inline-block;}" +
             "button:hover, .button:hover{background-color:#5a5a5a;}" +
             ".container{display:flex; flex-wrap:wrap; gap: 20px; margin-top:20px;} " +
@@ -210,6 +230,7 @@ public class WebLogger extends NanoHTTPD {
             "<body><h1>PictureToLogic Debug Hub</h1>" +
             "<a href='/debug' class='button'>Visual Debugger (Slices)</a>" +
             "<a href='/logs' class='button'>Text Logs</a>" +
+            "<a href='/processor-codes' class='button'>Processor Codes</a>" +
             "</body></html>";
     }
 
@@ -245,9 +266,23 @@ public class WebLogger extends NanoHTTPD {
             "<pre id='logs'>Loading...</pre>" +
             "<script>" +
             "const logsPre = document.getElementById('logs');" +
-            "function fetchLogs(){ fetch('/logs').then(res => res.text()).then(text => { logsPre.textContent = text; }); }" +
+            // ИСПРАВЛЕНИЕ: Запрашиваем текст с /api/logs-text, а не с /logs
+            "function fetchLogs(){ fetch('/api/logs-text').then(res => res.text()).then(text => { logsPre.textContent = text; }); }" +
             "setInterval(fetchLogs, 2000);" +
             "fetchLogs();" +
             "</script></body></html>";
+    }
+
+    private String getProcessorCodesPageHtml() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("<html><head><title>Processor Codes</title>").append(getStyle()).append("</head>");
+        sb.append("<body><h1>Processor Codes</h1><a href='/' class='button'>Back to Hub</a>");
+        synchronized (processorCodeLogs) {
+            for (String codeBlock : processorCodeLogs) {
+                sb.append("<pre>").append(codeBlock.replace("<", "&lt;").replace(">", "&gt;")).append("</pre>");
+            }
+        }
+        sb.append("</body></html>");
+        return sb.toString();
     }
 }
