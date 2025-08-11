@@ -183,7 +183,6 @@ public class WebLogger extends NanoHTTPD {
         if (ENABLE_WEB_LOGGER) {
             slider.changed(() -> info("UI Event: Slider '%s' set to %f", name, slider.getValue()));
         }
-        // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
         return slider;
     }
 
