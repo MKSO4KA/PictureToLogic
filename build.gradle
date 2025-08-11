@@ -10,7 +10,7 @@ version = props.getProperty("modVersion", "1.0-SNAPSHOT")
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(8)
+        languageVersion = JavaLanguageVersion.of(17)
     }
 }
 
@@ -19,7 +19,7 @@ ext {
     isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
 }
 
-sourceCompatibility = 1.8
+sourceCompatibility = 17
 
 repositories {
     mavenCentral()
@@ -32,6 +32,9 @@ dependencies {
     compileOnly "com.github.Anuken.Mindustry:core:${mindustryVersion}"
     compileOnly "com.github.Anuken.Arc:arc-core:${mindustryVersion}"
     implementation 'org.nanohttpd:nanohttpd:2.3.1'
+    
+    // --- НОВАЯ ЗАВИСИМОСТЬ ДЛЯ ТРИАНГУЛЯЦИИ ---
+    implementation 'io.github.jdiemke:delaunator-java:1.0.3'
 }
 
 processResources {
@@ -62,17 +65,17 @@ task jarAndroid (type: Jar, dependsOn: jar){
     }
 }
 
-task deploy(type: Jar, dependsOn: jarAndroid) {
-    // --- ГЛАВНОЕ ИСПРАВЛЕНИЕ ---
-    // Устанавливаем точное имя файла, игнорируя версию.
-    archiveFileName = "PictureToLogic.jar"
-    // ---------------------------
-
-    from(zipTree(jar.archiveFile), zipTree(jarAndroid.archiveFile))
-
+task deploy(dependsOn: jarAndroid) {
     doLast {
-        delete(jar.archiveFile)
-        delete(jarAndroid.archiveFile)
+        def androidJarFile = tasks.jarAndroid.archiveFile.get().asFile
+        def finalJarFile = new File(androidJarFile.getParent(), "PictureToLogic.jar")
+        delete(tasks.jar.archiveFile.get().asFile)
+        if (finalJarFile.exists()) {
+            delete(finalJarFile)
+        }
+        if (!androidJarFile.renameTo(finalJarFile)) {
+            throw new GradleException("Could not rename ${androidJarFile} to ${finalJarFile}")
+        }
     }
 }
 

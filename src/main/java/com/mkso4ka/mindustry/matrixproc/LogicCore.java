@@ -22,37 +22,21 @@ public class LogicCore {
 
     private static final int BORDER_SIZE = 8;
 
-    public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, double tolerance, int maxInstructions, int diffusionIterations, float diffusionContrast) {
+    public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, double tolerance, int maxInstructions, int diffusionIterations, float diffusionContrast, boolean useTransparentBg) {
         try {
             WebLogger.clearDebugImages();
             WebLogger.clearProcessorCodeLogs();
+
+            Pixmap masterPixmap = new Pixmap(imageFile);
 
             int displaySize = displayBlock.size;
             int displayPixelSize = getDisplayPixelSize(displaySize);
             int totalWidth = (displaysX * displayPixelSize) + (Math.max(0, displaysX - 1) * BORDER_SIZE * 2);
             int totalHeight = (displaysY * displayPixelSize) + (Math.max(0, displaysY - 1) * BORDER_SIZE * 2);
 
-            Pixmap originalPixmap = new Pixmap(imageFile);
-
-            // --- НАЧАЛО КОСТЫЛЯ: ПОВОРОТ ИЗОБРАЖЕНИЯ НА 90° ВПРАВО ---
-            WebLogger.info("Applying 90-degree clockwise rotation crutch...");
-            int originalWidth = originalPixmap.getWidth();
-            int originalHeight = originalPixmap.getHeight();
-            Pixmap masterPixmap = new Pixmap(originalHeight, originalWidth); // Размеры меняются местами
-
-            for (int y = 0; y < originalHeight; y++) {
-                for (int x = 0; x < originalWidth; x++) {
-                    int color = originalPixmap.get(x, y);
-                    // Формула поворота на 90 градусов по часовой стрелке
-                    masterPixmap.set(originalHeight - 1 - y, x, color);
-                }
-            }
-            originalPixmap.dispose(); // Освобождаем память от исходного изображения
-            // --- КОНЕЦ КОСТЫЛЯ ---
-
             Pixmap scaledMasterPixmap = new Pixmap(totalWidth, totalHeight);
             scaledMasterPixmap.draw(masterPixmap, 0, 0, masterPixmap.width, masterPixmap.height, 0, 0, totalWidth, totalHeight);
-            masterPixmap.dispose(); // Освобождаем память от повернутого изображения
+            masterPixmap.dispose();
 
             DisplayMatrix displayMatrix = new DisplayMatrix();
             MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, DisplayProcessorMatrixFinal.PROCESSOR_REACH);
@@ -73,13 +57,25 @@ public class LogicCore {
                     Pixmap finalSlice = new Pixmap(sliceWidth, sliceHeight);
                     finalSlice.draw(scaledMasterPixmap, subX, subY, sliceWidth, sliceHeight, 0, 0, sliceWidth, sliceHeight);
                     
+                    if (useTransparentBg) {
+                        int bgColor = finalSlice.get(0, 0);
+                        for (int y = 0; y < finalSlice.getHeight(); y++) {
+                            for (int x = 0; x < finalSlice.getWidth(); x++) {
+                                if (finalSlice.get(x, y) == bgColor) {
+                                    finalSlice.set(x, y, 0);
+                                }
+                            }
+                        }
+                    }
+
+                    // --- ИСПОЛЬЗУЕМ НОВЫЙ ImageProcessor ---
                     ImageProcessor processor = new ImageProcessor(finalSlice);
                     ImageProcessor.ProcessingSteps steps = processor.process(tolerance, diffusionIterations, diffusionContrast);
                     
-                    Map<Integer, List<Rect>> rects = steps.result;
                     int offsetX = (j > 0) ? BORDER_SIZE : 0;
                     int offsetY = (i > 0) ? BORDER_SIZE : 0;
-                    List<String> allCommands = generateCommandList(rects, displayPixelSize, offsetX, offsetY);
+                    // --- ГЕНЕРИРУЕМ КОМАНДЫ ДЛЯ ТРЕУГОЛЬНИКОВ ---
+                    List<String> allCommands = generateTriangleCommandList(steps.result, displayPixelSize, offsetX, offsetY);
                     
                     StringBuilder fullCodeBuilder = new StringBuilder();
                     allCommands.forEach(cmd -> fullCodeBuilder.append(cmd).append("\n"));
@@ -202,17 +198,22 @@ public class LogicCore {
         return new Schematic(tiles, tags, width, height);
     }
 
-    private List<String> generateCommandList(Map<Integer, List<Rect>> rects, int displayPixelSize, int offsetX, int offsetY) {
+    // --- НОВЫЙ МЕТОД ГЕНЕРАЦИИ КОМАНД ДЛЯ ТРЕУГОЛЬНИКОВ ---
+    private List<String> generateTriangleCommandList(Map<Integer, List<ImageProcessor.Triangle>> triangles, int displayPixelSize, int offsetX, int offsetY) {
         List<String> commands = new ArrayList<>();
-        for (Map.Entry<Integer, List<Rect>> entry : rects.entrySet()) {
-            List<Rect> rectList = entry.getValue();
-            if (!rectList.isEmpty()) {
+        for (Map.Entry<Integer, List<ImageProcessor.Triangle>> entry : triangles.entrySet()) {
+            List<ImageProcessor.Triangle> triangleList = entry.getValue();
+            if (!triangleList.isEmpty()) {
                 commands.add(formatColorCommand(entry.getKey()));
-                for (Rect rect : rectList) {
-                    int correctedX = rect.x - offsetX;
-                    int correctedY = rect.y - offsetY;
-                    int mindustryY = displayPixelSize - 1 - correctedY - (rect.h - 1);
-                    commands.add(String.format("draw rect %d %d %d %d 0 0", correctedX, mindustryY, rect.w, rect.h));
+                for (ImageProcessor.Triangle t : triangleList) {
+                    // Корректируем координаты относительно слайса и инвертируем Y для Mindustry
+                    int x1 = t.x1 - offsetX;
+                    int y1 = displayPixelSize - 1 - (t.y1 - offsetY);
+                    int x2 = t.x2 - offsetX;
+                    int y2 = displayPixelSize - 1 - (t.y2 - offsetY);
+                    int x3 = t.x3 - offsetX;
+                    int y3 = displayPixelSize - 1 - (t.y3 - offsetY);
+                    commands.add(String.format("draw triangle %d %d %d %d %d %d 0 0", x1, y1, x2, y2, x3, y3));
                 }
             }
         }
