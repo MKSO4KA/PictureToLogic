@@ -25,15 +25,13 @@ repositories {
     mavenCentral()
     maven { url "https://raw.githubusercontent.com/Zelaux/MindustryRepo/master/repository" }
     maven { url "https://raw.githubusercontent.com/Anuken/Mindustry/mvn-repo/repository" }
-    maven { url "https://jitpack.io" }
+    // --- ИСПРАВЛЕНИЕ: РЕПОЗИТОРИЙ JITPACK УДАЛЕН, ТАК КАК ОН НЕ НУЖЕН И ВЫЗЫВАЕТ ОШИБКУ ---
 }
 
 dependencies {
     compileOnly "com.github.Anuken.Mindustry:core:${mindustryVersion}"
     compileOnly "com.github.Anuken.Arc:arc-core:${mindustryVersion}"
     implementation 'org.nanohttpd:nanohttpd:2.3.1'
-    
-    // --- НОВАЯ ЗАВИСИМОСТЬ ДЛЯ ТРИАНГУЛЯЦИИ ---
     implementation 'io.github.jdiemke:delaunator-java:1.0.3'
 }
 
