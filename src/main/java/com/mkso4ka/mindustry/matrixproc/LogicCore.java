@@ -56,19 +56,9 @@ public class LogicCore {
                     Pixmap finalSlice = new Pixmap(sliceWidth, sliceHeight);
                     finalSlice.draw(scaledMasterPixmap, subX, subY, sliceWidth, sliceHeight, 0, 0, sliceWidth, sliceHeight);
                     
-                    // --- ВОЗВРАЩАЕМ ЛОГИРОВАНИЕ СЛАЙСОВ ---
-                    WebLogger.logImage(String.format("slice_%d_0_raw", displayIndex), finalSlice);
-
                     ImageProcessor processor = new ImageProcessor(finalSlice);
                     ImageProcessor.ProcessingSteps steps = processor.process(tolerance, diffusionIterations, diffusionContrast);
                     
-                    WebLogger.logImage(String.format("slice_%d_1_filtered", displayIndex), steps.filteredPixmap);
-                    WebLogger.logImage(String.format("slice_%d_2_quantized", displayIndex), steps.quantizedPixmap);
-
-                    Pixmap rectsPixmap = ImageProcessor.drawRectsOnPixmap(steps.quantizedPixmap, steps.result);
-                    WebLogger.logImage(String.format("slice_%d_3_rects", displayIndex), rectsPixmap);
-                    // --- КОНЕЦ ВОЗВРАЩЕНИЯ ЛОГИРОВАНИЯ ---
-
                     Map<Integer, List<Rect>> rects = steps.result;
                     int offsetX = (j > 0) ? BORDER_SIZE : 0;
                     int offsetY = (i > 0) ? BORDER_SIZE : 0;
@@ -78,30 +68,43 @@ public class LogicCore {
                     allCommands.forEach(cmd -> fullCodeBuilder.append(cmd).append("\n"));
                     finalCodesForApi.add(new DisplayCodeInfo(displayIndex, fullCodeBuilder.toString(), displayPixelSize));
 
-                    int commandCount = allCommands.size();
-                    processorsPerDisplay[displayIndex] = (int) Math.ceil((double) commandCount / maxInstructions);
+                    // --- УЛУЧШЕННАЯ ЛОГИКА РАЗДЕЛЕНИЯ КОДА ---
+                    List<String> processorChunks = new ArrayList<>();
+                    if (!allCommands.isEmpty()) {
+                        List<String> currentChunk = new ArrayList<>();
+                        String activeColor = "";
 
-                    for (int p = 0; p < processorsPerDisplay[displayIndex]; p++) {
-                        int start = p * maxInstructions;
-                        int end = Math.min(start + maxInstructions, commandCount);
-                        List<String> chunk = allCommands.subList(start, end);
-                        
-                        StringBuilder codeBuilder = new StringBuilder();
-                        String lastColor = "";
-                        for (int k = start; k >= 0; k--) {
-                            if (allCommands.get(k).startsWith("draw color")) {
-                                lastColor = allCommands.get(k);
-                                break;
+                        for (String command : allCommands) {
+                            if (command.startsWith("draw color")) {
+                                activeColor = command;
+                            }
+
+                            // Если в чанке еще нет команд, и есть активный цвет, добавляем его
+                            if (currentChunk.isEmpty() && !activeColor.isEmpty()) {
+                                currentChunk.add(activeColor);
+                            }
+                            
+                            currentChunk.add(command);
+
+                            // Проверяем, не превышен ли лимит (maxInstructions уже уменьшен в ModUI)
+                            if (currentChunk.size() >= maxInstructions) {
+                                processorChunks.add(String.join("\n", currentChunk));
+                                currentChunk.clear();
                             }
                         }
-                        if (!chunk.isEmpty() && !chunk.get(0).startsWith("draw color") && !lastColor.isEmpty()) {
-                            codeBuilder.append(lastColor).append("\n");
+                        // Добавляем последний оставшийся чанк
+                        if (!currentChunk.isEmpty()) {
+                            processorChunks.add(String.join("\n", currentChunk));
                         }
-                        chunk.forEach(command -> codeBuilder.append(command).append("\n"));
-                        codeBuilder.append("drawflush display1");
-                        
-                        codeMap.get(displayIndex).add(codeBuilder.toString());
                     }
+                    
+                    // Добавляем drawflush и сохраняем
+                    for(String chunk : processorChunks){
+                        codeMap.get(displayIndex).add(chunk + "\ndrawflush display1");
+                    }
+                    processorsPerDisplay[displayIndex] = processorChunks.size();
+                    // --- КОНЕЦ УЛУЧШЕННОЙ ЛОГИКИ ---
+
                     finalSlice.dispose();
                 }
             }
@@ -128,6 +131,7 @@ public class LogicCore {
         Seq<Stile> tiles = new Seq<>();
         int height = matrix.length;
         int width = matrix[0].length;
+        int processorCount = 0;
 
         for (int row = 0; row < height; row++) {
             for (int col = 0; col < width; col++) {
@@ -136,7 +140,16 @@ public class LogicCore {
                     short schemX = (short)col;
                     short schemY = (short)row;
                     DisplayInfo ownerDisplay = displays[cell.ownerId];
-                    String code = codeMap.get(cell.ownerId).get(cell.processorIndex);
+                    
+                    String code = "### ERROR: Code not found ###";
+                    List<String> codesForDisplay = codeMap.get(cell.ownerId);
+                    if (codesForDisplay != null && cell.processorIndex < codesForDisplay.size()) {
+                        code = codesForDisplay.get(cell.processorIndex);
+                    }
+
+                    // --- ДОБАВЛЯЕМ ПОДРОБНОЕ ЛОГИРОВАНИЕ КОДА ПРОЦЕССОРА ---
+                    WebLogger.info("[Processor Code] Display #%d / Proc #%d:\n---\n%s\n---", cell.ownerId, cell.processorIndex, code);
+
                     LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
                     build.tile = new Tile(schemX, schemY);
                     int linkToX = ownerDisplay.bottomLeft.x + displayBlock.size / 2;
@@ -144,6 +157,7 @@ public class LogicCore {
                     build.links.add(new LogicLink(linkToX, linkToY, "display1", true));
                     build.updateCode(code);
                     tiles.add(new Stile(Blocks.microProcessor, schemX, schemY, build.config(), (byte) 0));
+                    processorCount++;
                 }
             }
         }
@@ -156,6 +170,9 @@ public class LogicCore {
             tiles.add(new Stile(displayBlock, finalX, finalY, null, (byte) 0));
         }
         
+        // --- ДОБАВЛЯЕМ ЛОГИРОВАНИЕ ОБЩЕГО КОЛИЧЕСТВА ОБЪЕКТОВ ---
+        WebLogger.info("[Schematic Stats] Total objects placed: %d (%d displays, %d processors)", displays.length + processorCount, displays.length, processorCount);
+
         StringMap tags = new StringMap();
         tags.put("name", "PictureToLogic-Schematic");
         return new Schematic(tiles, tags, width, height);
