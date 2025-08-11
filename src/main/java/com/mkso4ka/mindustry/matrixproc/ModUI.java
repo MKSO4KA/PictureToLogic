@@ -18,8 +18,8 @@ public class ModUI {
     private static LogicDisplay selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay;
     private static boolean showDebug = true;
 
-    private static Slider xSlider, ySlider, toleranceSlider, instructionsSlider;
-    private static Label xLabel, yLabel, toleranceLabel, instructionsLabel;
+    private static Slider xSlider, ySlider, toleranceSlider, instructionsSlider, filterSlider;
+    private static Label xLabel, yLabel, toleranceLabel, instructionsLabel, filterLabel;
     private static Table previewTable;
 
     public static void build() {
@@ -73,6 +73,14 @@ public class ModUI {
         sliders.add("Макс. инструкций:").padTop(10);
         sliders.add(instructionsSlider).width(200f).padLeft(10).padRight(10).padTop(10);
         sliders.add(instructionsLabel).padTop(10);
+        sliders.row();
+
+        filterSlider = WebLogger.logChange(new Slider(0, 2, 1, false), "Noise Filter");
+        filterSlider.setValue(1);
+        filterLabel = new Label("3x3");
+        sliders.add("Фильтрация шума:").padTop(10);
+        sliders.add(filterSlider).width(200f).padLeft(10).padRight(10).padTop(10);
+        sliders.add(filterLabel).padTop(10);
 
         previewTable = new Table();
         previewTable.setBackground(Tex.buttonDown);
@@ -145,6 +153,13 @@ public class ModUI {
         instructionsSlider.changed(() -> {
             instructionsLabel.setText(String.valueOf((int)instructionsSlider.getValue()));
         });
+        filterSlider.changed(() -> {
+            int value = (int)filterSlider.getValue();
+            String text = "Выкл.";
+            if (value == 1) text = "3x3";
+            if (value == 2) text = "5x5";
+            filterLabel.setText(text);
+        });
         updatePreview();
 
         WebLogger.logShow(dialog, "Settings Dialog");
@@ -171,6 +186,7 @@ public class ModUI {
         WebLogger.info("Display Type: %s", selectedDisplay.name);
         WebLogger.info("Color Tolerance (Delta E): %.1f", toleranceSlider.getValue());
         WebLogger.info("Max Instructions (User): %d", (int)instructionsSlider.getValue());
+        WebLogger.info("Noise Filter Strength: %d", (int)filterSlider.getValue());
 
         new Thread(() -> {
             ProcessingResult result = null;
@@ -179,9 +195,10 @@ public class ModUI {
                 int displaysY = (int) ySlider.getValue();
                 double tolerance = toleranceSlider.getValue();
                 int maxInstructions = (int)instructionsSlider.getValue() - 11;
+                int filterStrength = (int)filterSlider.getValue();
 
                 LogicCore logic = new LogicCore();
-                result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay, tolerance, maxInstructions);
+                result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay, tolerance, maxInstructions, filterStrength);
             } catch (Exception e) {
                 WebLogger.err("Критическая ошибка при создании чертежа!", e);
             } finally {

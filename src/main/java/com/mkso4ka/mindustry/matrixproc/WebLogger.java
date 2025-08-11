@@ -4,7 +4,7 @@ import arc.Core;
 import arc.files.Fi;
 import arc.func.Cons;
 import arc.graphics.Pixmap;
-import arc.graphics.PixmapIO; // Используем этот класс, но правильно
+import arc.graphics.PixmapIO;
 import arc.scene.ui.Button;
 import arc.scene.ui.CheckBox;
 import arc.scene.ui.Slider;
@@ -102,20 +102,15 @@ public class WebLogger extends NanoHTTPD {
     public static void logImage(String name, Pixmap pixmap) {
         if (!ENABLE_WEB_LOGGER || pixmap == null) return;
         
-        // --- ИСПРАВЛЕНИЕ: Используем трюк с временным файлом ---
         Fi tempFile = Fi.tempFile("picturetologic-debug");
         try {
-            // 1. Записываем Pixmap во временный файл
             PixmapIO.writePng(tempFile, pixmap);
-            // 2. Читаем байты из этого файла
             byte[] bytes = tempFile.readBytes();
-            // 3. Сохраняем байты в памяти
             debugImages.put(name, bytes);
             info("Logged debug image: %s (%d bytes)", name, bytes.length);
         } catch (Exception e) {
             err("Failed to log image %s", e);
         } finally {
-            // 4. Гарантированно удаляем временный файл
             tempFile.delete();
         }
     }

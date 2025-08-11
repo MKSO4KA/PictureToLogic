@@ -3,6 +3,7 @@ package com.mkso4ka.mindustry.matrixproc;
 import arc.graphics.Color;
 import arc.graphics.Pixmap;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,9 +15,11 @@ public class ImageProcessor {
     private int height;
 
     public static class ProcessingSteps {
+        public final Pixmap filteredPixmap;
         public final Pixmap quantizedPixmap;
         public final Map<Integer, List<Rect>> result;
-        public ProcessingSteps(Pixmap quantized, Map<Integer, List<Rect>> result) {
+        public ProcessingSteps(Pixmap filtered, Pixmap quantized, Map<Integer, List<Rect>> result) {
+            this.filteredPixmap = filtered;
             this.quantizedPixmap = quantized;
             this.result = result;
         }
@@ -28,10 +31,36 @@ public class ImageProcessor {
         this.height = pixmap.getHeight();
     }
 
-    public ProcessingSteps process(double tolerance) {
-        Pixmap processedPixmap = (tolerance > 0) ? quantize(tolerance) : originalPixmap;
-        Map<Integer, List<Rect>> rects = groupOptimal(processedPixmap);
-        return new ProcessingSteps(processedPixmap, rects);
+    public ProcessingSteps process(double tolerance, int filterStrength) {
+        Pixmap filteredPixmap = (filterStrength > 0) ? applyMedianFilter(originalPixmap, filterStrength) : originalPixmap;
+        Pixmap quantizedPixmap = (tolerance > 0) ? quantize(filteredPixmap) : filteredPixmap;
+        Map<Integer, List<Rect>> rects = groupOptimal(quantizedPixmap);
+        return new ProcessingSteps(filteredPixmap, quantizedPixmap, rects);
+    }
+
+    private Pixmap applyMedianFilter(Pixmap source, int strength) {
+        Pixmap result = new Pixmap(width, height);
+        int size = strength * 2 + 1;
+        int[] window = new int[size * size];
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int count = 0;
+                for (int j = -strength; j <= strength; j++) {
+                    for (int i = -strength; i <= strength; i++) {
+                        int currentX = x + i;
+                        int currentY = y + j;
+                        if (currentX >= 0 && currentX < width && currentY >= 0 && currentY < height) {
+                            window[count++] = source.get(currentX, currentY);
+                        }
+                    }
+                }
+                Arrays.sort(window, 0, count);
+                result.set(x, y, window[count / 2]);
+            }
+        }
+        WebLogger.info("Median filter applied with strength %d (%dx%d)", strength, size, size);
+        return result;
     }
 
     private Pixmap quantize(double tolerance) {
@@ -155,10 +184,8 @@ public class ImageProcessor {
         Pixmap copy = new Pixmap(source.getWidth(), source.getHeight());
         copy.draw(source);
         
-        // ИСПРАВЛЕНО: Используем правильный метод drawRect с 5 аргументами
         for (List<Rect> rectList : rects.values()) {
             for (Rect rect : rectList) {
-                // Метод drawRect принимает цвет как int (RGBA8888)
                 copy.drawRect(rect.x, rect.y, rect.w, rect.h, Color.red.rgba());
             }
         }

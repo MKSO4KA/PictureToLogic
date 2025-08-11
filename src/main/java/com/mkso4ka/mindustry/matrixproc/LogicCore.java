@@ -25,7 +25,7 @@ public class LogicCore {
 
     private static final int BORDER_SIZE = 8;
 
-    public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, double tolerance, int maxInstructions) {
+    public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, double tolerance, int maxInstructions, int filterStrength) {
         try {
             WebLogger.clearDebugImages();
 
@@ -59,12 +59,13 @@ public class LogicCore {
                     WebLogger.logImage(String.format("slice_%d_0_raw", displayIndex), finalSlice);
 
                     ImageProcessor processor = new ImageProcessor(finalSlice);
-                    ImageProcessor.ProcessingSteps steps = processor.process(tolerance);
+                    ImageProcessor.ProcessingSteps steps = processor.process(tolerance, filterStrength);
                     
-                    WebLogger.logImage(String.format("slice_%d_1_quantized", displayIndex), steps.quantizedPixmap);
+                    WebLogger.logImage(String.format("slice_%d_1_filtered", displayIndex), steps.filteredPixmap);
+                    WebLogger.logImage(String.format("slice_%d_2_quantized", displayIndex), steps.quantizedPixmap);
 
                     Pixmap rectsPixmap = ImageProcessor.drawRectsOnPixmap(steps.quantizedPixmap, steps.result);
-                    WebLogger.logImage(String.format("slice_%d_2_rects", displayIndex), rectsPixmap);
+                    WebLogger.logImage(String.format("slice_%d_3_rects", displayIndex), rectsPixmap);
 
                     Map<Integer, List<Rect>> rects = steps.result;
                     int offsetX = (j > 0) ? BORDER_SIZE : 0;
@@ -158,14 +159,13 @@ public class LogicCore {
         
         StringMap tags = new StringMap();
         tags.put("name", "PictureToLogic-Schematic");
-        
         Schematic schematic = new Schematic(tiles, tags, width, height);
 
         if (WebLogger.ENABLE_WEB_LOGGER) {
             SchematicData data = new SchematicData();
             data.timestamp = System.currentTimeMillis();
-            data.height = height;
-            data.width = width;
+            data.height = matrix.length;
+            data.width = matrix[0].length;
             data.displays = new ArrayList<>();
             data.processors = new ArrayList<>();
 
