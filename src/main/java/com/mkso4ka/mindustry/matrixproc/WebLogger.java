@@ -9,8 +9,7 @@ import arc.scene.ui.CheckBox;
 import arc.scene.ui.Slider;
 import arc.util.Log;
 import arc.util.serialization.Json;
-import arc.util.serialization.JsonWriter; // Убедитесь, что этот импорт на месте
-import com.mkso4ka.mindustry.matrixproc.debug.SchematicData;
+import arc.util.serialization.JsonWriter;
 import fi.iki.elonen.NanoHTTPD;
 import mindustry.Vars;
 import mindustry.ui.dialogs.BaseDialog;
@@ -33,8 +32,8 @@ public class WebLogger extends NanoHTTPD {
     private static WebLogger serverInstance;
     private static final SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm:ss");
 
+    private static String latestDisplayCodesJson = "[]";
     private static final Map<String, byte[]> debugImages = new ConcurrentHashMap<>();
-    private static String latestSchematicJson = "{}";
 
     private WebLogger() throws IOException {
         super(PORT);
@@ -43,55 +42,28 @@ public class WebLogger extends NanoHTTPD {
     @Override
     public Response serve(IHTTPSession session) {
         String uri = session.getUri();
-        Method method = session.getMethod();
-
-        // --- ГЛАВНОЕ ИЗМЕНЕНИЕ: Добавляем CORS заголовки ---
-        // Это позволит веб-страницам (если вы захотите сделать более сложный отладчик)
-        // без проблем обращаться к вашему API.
-        Response.IStatus status = Response.Status.OK;
-        String mimeType = "text/plain";
-        String content = "Not Found";
-
-        if ("/".equals(uri)) {
-            mimeType = "text/html";
-            content = getMainPageHtml();
-        } else if ("/debug".equals(uri)) {
-            mimeType = "text/html";
-            content = getDebugPageHtml();
-        } else if ("/logs".equals(uri)) {
-            if (Method.GET.equals(method)) {
-                synchronized (logs) {
-                    content = String.join("\n", logs);
-                }
-            } else if (Method.DELETE.equals(method)) {
-                synchronized (logs) {
-                    logs.clear();
-                }
-                content = "Logs cleared.";
-            }
-        } else if (uri.startsWith("/debug/image/")) {
-            String imageName = uri.substring("/debug/image/".length());
-            byte[] imageData = debugImages.get(imageName);
-            if (imageData != null) {
-                Response res = newFixedLengthResponse(Response.Status.OK, "image/png", new ByteArrayInputStream(imageData), imageData.length);
-                res.addHeader("Access-Control-Allow-Origin", "*");
-                return res;
-            } else {
-                status = Response.Status.NOT_FOUND;
-            }
-        } else if ("/debug/list".equals(uri)) {
-            mimeType = "application/json";
-            content = "[\"" + String.join("\",\"", debugImages.keySet()) + "\"]";
-        } else if ("/api/schematic-data".equals(session.getUri())) {
-            mimeType = "application/json";
-            content = latestSchematicJson;
-        } else {
-            status = Response.Status.NOT_FOUND;
+        
+        if ("/api/display-codes".equals(uri)) {
+            Response res = newFixedLengthResponse(Response.Status.OK, "application/json", latestDisplayCodesJson);
+            res.addHeader("Access-Control-Allow-Origin", "*"); // Разрешаем кросс-доменные запросы
+            return res;
         }
 
-        Response res = newFixedLengthResponse(status, mimeType, content);
-        res.addHeader("Access-Control-Allow-Origin", "*"); // Разрешаем кросс-доменные запросы
-        return res;
+        if ("/logs".equals(uri)) {
+            String response;
+            synchronized (logs) { response = String.join("\n", logs); }
+            return newFixedLengthResponse(Response.Status.OK, "text/plain", response);
+        }
+
+        return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not Found");
+    }
+
+    public static void logDisplayCodes(List<DisplayCodeInfo> codes) {
+        if (!ENABLE_WEB_LOGGER) return;
+        Json json = new Json();
+        json.setOutputType(JsonWriter.OutputType.json);
+        latestDisplayCodesJson = json.toJson(codes);
+        info("Display codes updated for external API. %d displays.", codes.size());
     }
 
     private static void log(String level, String text, Object... args) {
@@ -116,13 +88,11 @@ public class WebLogger extends NanoHTTPD {
 
     public static void logImage(String name, Pixmap pixmap) {
         if (!ENABLE_WEB_LOGGER || pixmap == null) return;
-        
         Fi tempFile = Fi.tempFile("picturetologic-debug");
         try {
             PixmapIO.writePng(tempFile, pixmap);
             byte[] bytes = tempFile.readBytes();
             debugImages.put(name, bytes);
-            info("Logged debug image: %s (%d bytes)", name, bytes.length);
         } catch (Exception e) {
             err("Failed to log image %s", e);
         } finally {
@@ -136,19 +106,26 @@ public class WebLogger extends NanoHTTPD {
         }
     }
 
-    public static void logSchematicData(SchematicData data) {
-        if (!ENABLE_WEB_LOGGER) return;
-        Json json = new Json();
-        
-        // --- ЭТО КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ ---
-        // Устанавливаем режим вывода, который соответствует стандарту JSON (с кавычками для полей).
-        // Это делает JSON совместимым с Python и другими стандартными парсерами.
-        json.setOutputType(JsonWriter.OutputType.json);
-        
-        latestSchematicJson = json.prettyPrint(data); // Используем prettyPrint для читаемости при отладке
-        info("Schematic data updated for external debugger.");
+    public static void startServer() {
+        if (!ENABLE_WEB_LOGGER || serverInstance != null) return;
+        try {
+            serverInstance = new WebLogger();
+            serverInstance.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
+            Log.info("[green]WebLogger запущен на http://localhost:" + PORT + "[/]");
+            Runtime.getRuntime().addShutdownHook(new Thread(WebLogger::stopServer));
+        } catch (IOException e) {
+            Log.err("Не удалось запустить WebLogger", e);
+        }
     }
 
+    public static void stopServer() {
+        if (serverInstance != null) {
+            serverInstance.stop();
+            serverInstance = null;
+            Log.info("[scarlet]WebLogger остановлен.[/]");
+        }
+    }
+    
     public static <T extends Button> T logClick(T button, String name) {
         if (ENABLE_WEB_LOGGER) {
             button.clicked(() -> info("UI Event: Clicked '%s'", name));
@@ -161,13 +138,6 @@ public class WebLogger extends NanoHTTPD {
             slider.changed(() -> info("UI Event: Slider '%s' set to %d", name, (int)slider.getValue()));
         }
         return slider;
-    }
-
-    public static CheckBox logToggle(CheckBox checkBox, String name) {
-        if (ENABLE_WEB_LOGGER) {
-            checkBox.changed(() -> info("UI Event: CheckBox '%s' is now %s", name, checkBox.isChecked() ? "checked" : "unchecked"));
-        }
-        return checkBox;
     }
 
     public static void logShow(BaseDialog dialog, String name) {
@@ -191,68 +161,5 @@ public class WebLogger extends NanoHTTPD {
             }
             callback.get(file);
         });
-    }
-
-    public static void startServer() {
-        if (!ENABLE_WEB_LOGGER || serverInstance != null) return;
-        try {
-            serverInstance = new WebLogger();
-            serverInstance.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false);
-            Log.info("[green]WebLogger запущен на http://localhost:" + PORT + "[/]");
-            Runtime.getRuntime().addShutdownHook(new Thread(WebLogger::stopServer));
-        } catch (IOException e) {
-            Log.err("Не удалось запустить WebLogger", e);
-        }
-    }
-
-    public static void stopServer() {
-        if (serverInstance != null) {
-            serverInstance.stop();
-            serverInstance = null;
-            Log.info("[scarlet]WebLogger остановлен.[/]");
-        }
-    }
-
-    private String getMainPageHtml() {
-        return "<html><head><title>PictureToLogic Logs</title>" +
-            "<style>body{font-family:monospace;background-color:#2c2c2c;color:#e0e0e0;} a{color:#ffd06b;} pre{white-space:pre-wrap;word-break:break-all;} button{padding:10px;}</style></head>" +
-            "<body><h1>PictureToLogic Live Logs</h1><p><a href='/debug'>Go to Visual Debugger</a></p><button onclick='clearLogs()'>Clear Logs</button><pre id='logs'></pre>" +
-            "<script>" +
-            "const logsPre = document.getElementById('logs');" +
-            "function fetchLogs(){ fetch('/logs').then(res => res.text()).then(text => { logsPre.textContent = text; logsPre.scrollTop = logsPre.scrollHeight; }); }" +
-            "function clearLogs(){ fetch('/logs', { method: 'DELETE' }).then(() => fetchLogs()); }" +
-            "setInterval(fetchLogs, 2000);" +
-            "fetchLogs();" +
-            "</script></body></html>";
-    }
-
-    private String getDebugPageHtml() {
-        return "<html><head><title>Visual Debugger</title>" +
-            "<style>" +
-            "body{font-family:sans-serif;background-color:#2c2c2c;color:#e0e0e0; margin:0; padding:20px;} " +
-            "a{color:#ffd06b;} h1,h2{border-bottom:1px solid #555; padding-bottom:5px;} " +
-            ".container{display:flex; flex-wrap:wrap;} " +
-            ".slice{border:1px solid #555; margin:10px; padding:10px; background-color:#3c3c3c;} " +
-            "img{border:1px solid #888; margin:5px; max-width:400px; image-rendering:pixelated;}" +
-            "</style></head>" +
-            "<body><h1>Visual Debugger</h1><p><a href='/'>Back to Text Logs</a></p>" +
-            "<div class='slice'><h2>Final Schematic Layout</h2><img src='/debug/image/schematic_0_final_layout.png?t=" + System.currentTimeMillis() + "'></div>" +
-            "<div id='slicesContainer' class='container'></div>" +
-            "<script>" +
-            "const slicesDiv = document.getElementById('slicesContainer');" +
-            "fetch('/debug/list').then(r => r.json()).then(files => {" +
-            "  const slices = {};" +
-            "  files.forEach(f => { if(f.startsWith('slice_')) { const parts = f.split('_'); const id = parts[1]; if(!slices[id]) slices[id] = []; slices[id].push(f); } });" +
-            "  for(const id in slices){" +
-            "    const sliceDiv = document.createElement('div'); sliceDiv.className = 'slice';" +
-            "    sliceDiv.innerHTML = `<h2>Slice #${id}</h2>`;" +
-            "    slices[id].sort().forEach(f => {" +
-            "      const name = f.split('_').slice(2).join('_').replace('.png','');" +
-            "      sliceDiv.innerHTML += `<div><h3>${name}</h3><img src='/debug/image/${f}?t=" + System.currentTimeMillis() + "'></div>`;" +
-            "    });" +
-            "    slicesDiv.appendChild(sliceDiv);" +
-            "  }" +
-            "});" +
-            "</script></body></html>";
     }
 }
