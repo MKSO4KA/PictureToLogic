@@ -6,11 +6,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-release:
     runs-on: ubuntu-latest
-    outputs:
-      mod_name: ${{ steps.get_name.outputs.MOD_NAME }}
-      build_success: ${{ steps.build_jar.outcome == 'success' }}
+    permissions:
+      contents: write # Необходимо для создания/обновления релиза
 
     steps:
       - name: Checkout repository
@@ -30,52 +29,18 @@ jobs:
 
       - name: Build Universal Jar with Gradle
         id: build_jar
-        # continue-on-error: true - это ключ. Шаг продолжится, даже если сборка упадет.
-        continue-on-error: true
         run: ./gradlew deploy
-
-      - name: Get Mod Name (if successful)
-        id: get_name
-        if: steps.build_jar.outcome == 'success'
-        run: echo "MOD_NAME=$(basename build/libs/*.jar .jar)" >> $GITHUB_OUTPUT
-
-      - name: Upload JAR artifact (if successful)
-        if: steps.build_jar.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: mod-jar
-          path: build/libs/*.jar
-
-  create-release:
-    runs-on: ubuntu-latest
-    needs: build
-    permissions:
-      contents: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Download JAR artifact (if successful)
-        if: needs.build.outputs.build_success == 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: mod-jar
 
       - name: Create Source Code ZIP
         run: zip -r source-code.zip . -x ".git/*" ".github/*" "build/*" ".gradle/*"
 
-      - name: Create GitHub Release
+      - name: Create/Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          # Если сборка упала, добавляем суффикс -failed
-          tag_name: ${{ github.run_id }}-${{ github.run_number }}${{ needs.build.outputs.build_success == 'false' && '-failed' || '' }}
-          # Если сборка упала, помечаем релиз
-          name: "Build ${{ github.run_number }} ${{ needs.build.outputs.build_success == 'false' && '[BUILD FAILED]' || '' }}"
-          body: "Автоматическая сборка мода. Статус: ${{ needs.build.outputs.build_success == 'true' && 'Успешно' || 'Ошибка' }}"
-          # Если сборка упала, создаем черновик
-          draft: ${{ needs.build.outputs.build_success == 'false' }}
-          # Прикрепляем JAR только если сборка успешна
+          tag_name: latest
+          name: "Latest Build"
+          body: "Автоматическая сборка мода. Этот релиз всегда содержит самую свежую версию."
+          # Важно: `prerelease: false` и `make_latest: true` не нужны, так как мы перезаписываем тег
           files: |
-            ${{ needs.build.outputs.build_success == 'true' && format('{0}.jar', needs.build.outputs.mod_name) || '' }}
+            build/libs/PictureToLogic.jar
             source-code.zip
