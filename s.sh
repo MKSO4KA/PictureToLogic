@@ -1,221 +1,206 @@
 # ==============================================================================
-# === Скрипт для обновления файлов проекта PictureToLogic ===
+# === Финальный скрипт для исправления сборки PictureToLogic ===
 # ==============================================================================
 
-# --- Обновление MatrixBlueprint.java ---
-cat << 'EOF' > src/main/java/com/mkso4ka/mindustry/matrixproc/MatrixBlueprint.java
-package com.mkso4ka.mindustry.matrixproc;
-
-// Используем DPoint из библиотеки триангуляции
-import org.waveware.delaunator.DPoint;
-
-public class MatrixBlueprint {
-    public final int n, m;
-    // Поле должно быть типа DPoint[]
-    public final DPoint[] displayBottomLefts;
-
-    public MatrixBlueprint(int n, int m, DPoint[] displayBottomLefts) {
-        this.n = n;
-        this.m = m;
-        this.displayBottomLefts = displayBottomLefts;
-    }
-}
-EOF
-
-# --- Обновление DisplayMatrix.java ---
-cat << 'EOF' > src/main/java/com/mkso4ka/mindustry/matrixproc/DisplayMatrix.java
-package com.mkso4ka.mindustry.matrixproc;
-
-// Используем DPoint из библиотеки триангуляции
-import org.waveware.delaunator.DPoint;
-
-public class DisplayMatrix {
-    public MatrixBlueprint placeDisplaysXxY(int x, int y, int displaySize, int processorReach) {
-        int spacing = processorReach * 2;
-        int totalWidth = x * displaySize + (x - 1) * spacing;
-        int totalHeight = y * displaySize + (y - 1) * spacing;
-
-        // Создаем массив DPoint[]
-        DPoint[] displayBottomLefts = new DPoint[x * y];
-        int currentX = 0;
-        for (int i = 0; i < x; i++) {
-            int currentY = 0;
-            for (int j = 0; j < y; j++) {
-                // Создаем экземпляры DPoint
-                displayBottomLefts[i * y + j] = new DPoint(currentX, currentY);
-                currentY += displaySize + spacing;
-            }
-            currentX += displaySize + spacing;
-        }
-        return new MatrixBlueprint(totalWidth, totalHeight, displayBottomLefts);
-    }
-}
-EOF
-
-# --- Обновление DisplayInfo.java ---
+# --- 1. Восстанавливаем правильный DisplayInfo.java из вашего репозитория ---
 cat << 'EOF' > src/main/java/com/mkso4ka/mindustry/matrixproc/DisplayInfo.java
 package com.mkso4ka.mindustry.matrixproc;
 
-// Используем DPoint из библиотеки триангуляции
-import org.waveware.delaunator.DPoint;
+import arc.math.geom.Point2;
 
-public class DisplayInfo {
-    // Поле должно быть типа DPoint
-    public final DPoint bottomLeft;
-    public final int id;
+/**
+ * Хранит информацию о конкретном дисплее в схеме.
+ */
+class DisplayInfo {
+    final int id;
+    // Храним нижний левый угол, а не центр
+    final Point2 bottomLeft;
+    final int totalProcessorsRequired;
+    int processorsPlaced = 0;
 
-    public DisplayInfo(DPoint bottomLeft, int id) {
-        this.bottomLeft = bottomLeft;
+    DisplayInfo(int id, Point2 bottomLeft, int required) {
         this.id = id;
+        this.bottomLeft = bottomLeft;
+        this.totalProcessorsRequired = required;
+    }
+
+    public int getProcessorsNeeded() {
+        return totalProcessorsRequired - processorsPlaced;
     }
 }
 EOF
 
-# --- Обновление DisplayProcessorMatrixFinal.java ---
+# --- 2. Исправляем DisplayProcessorMatrixFinal.java (добавляем public и исправляем типы) ---
 cat << 'EOF' > src/main/java/com/mkso4ka/mindustry/matrixproc/DisplayProcessorMatrixFinal.java
 package com.mkso4ka.mindustry.matrixproc;
 
-// Используем DPoint из библиотеки триангуляции
-import org.waveware.delaunator.DPoint;
+import arc.math.geom.Point2;
+import arc.util.Log;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 
-public class DisplayProcessorMatrixFinal {
-    final int n, m;
-    final int[] processorsPerDisplay;
-    // Поле должно быть типа DPoint[]
-    final DPoint[] displays;
-    final int displaySize;
+class DisplayProcessorMatrixFinal {
+
+    private static class Spot {
+        final Point2 location;
+        final double distanceSq;
+        Spot(Point2 location, double distanceSq) { this.location = location; this.distanceSq = distanceSq; }
+    }
+
+    static class Cell {
+        int type = 0;
+        int ownerId = -1;
+        int processorIndex = -1;
+    }
+
+    public static final double PROCESSOR_REACH = 10.2;
+    private static final double PROCESSOR_REACH_SQ = PROCESSOR_REACH * PROCESSOR_REACH;
+
+    private final int n, m, displaySize;
     private final Cell[][] matrix;
-    
-    public static final int PROCESSOR_REACH = 10;
+    private final DisplayInfo[] displays;
 
-    // Конструктор принимает DPoint[]
-    public DisplayProcessorMatrixFinal(int n, int m, int[] processorsPerDisplay, DPoint[] displays, int displaySize) {
+    public DisplayProcessorMatrixFinal(int n, int m, int[] processorsPerDisplay, int[][] displayBottomLefts, int displaySize) {
         this.n = n;
         this.m = m;
-        this.processorsPerDisplay = processorsPerDisplay;
-        this.displays = displays;
         this.displaySize = displaySize;
-        this.matrix = new Cell[m][n];
-        for (int i = 0; i < m; i++) {
-            for (int j = 0; j < n; j++) {
-                matrix[i][j] = new Cell();
-            }
+        this.matrix = new Cell[n][m];
+        for (int i = 0; i < n; i++) for (int j = 0; j < m; j++) matrix[i][j] = new Cell();
+        
+        this.displays = new DisplayInfo[displayBottomLefts.length];
+        for (int i = 0; i < displayBottomLefts.length; i++) {
+            Point2 bottomLeft = new Point2(displayBottomLefts[i][0], displayBottomLefts[i][1]);
+            // ИСПРАВЛЕНИЕ: Конструктор теперь соответствует DisplayInfo
+            displays[i] = new DisplayInfo(i, bottomLeft, processorsPerDisplay[i]);
+            placeSingleDisplay(displays[i]);
         }
-        for (int i = 0; i < displays.length; i++) {
-            // p теперь типа DPoint, используем каст к int
-            DPoint p = displays[i];
-            for (int row = (int)p.y; row < (int)p.y + displaySize; row++) {
-                for (int col = (int)p.x; col < (int)p.x + displaySize; col++) {
-                    if (row < m && col < n) {
-                        matrix[row][col].type = 2;
-                        matrix[row][col].ownerId = i;
-                    }
+    }
+
+    public Cell[][] getMatrix() { return this.matrix; }
+    public DisplayInfo[] getDisplays() { return this.displays; }
+
+    private void placeSingleDisplay(DisplayInfo display) {
+        for (int i = 0; i < displaySize; i++) {
+            for (int j = 0; j < displaySize; j++) {
+                int currentX = display.bottomLeft.x + j;
+                int currentY = display.bottomLeft.y + i;
+                if (currentX >= 0 && currentX < m && currentY >= 0 && currentY < n) {
+                    matrix[currentY][currentX].type = 2;
+                    matrix[currentY][currentX].ownerId = display.id;
                 }
             }
         }
     }
 
     public void placeProcessors() {
-        for (int i = 0; i < displays.length; i++) {
-            int processorsToPlace = processorsPerDisplay[i];
-            DPoint displayPos = displays[i];
-            int placed = 0;
-            // Используем каст к int для координат DPoint
-            int dispX = (int)displayPos.x;
-            int dispY = (int)displayPos.y;
-            for (int r = 1; r <= PROCESSOR_REACH && placed < processorsToPlace; r++) {
-                for (int j = dispX - r; j <= dispX + displaySize - 1 + r && placed < processorsToPlace; j++) {
-                    placed += tryPlaceProcessor(j, dispY - r, i, placed, processorsToPlace);
-                    placed += tryPlaceProcessor(j, dispY + displaySize - 1 + r, i, placed, processorsToPlace);
-                }
-                for (int j = dispY - r + 1; j <= dispY + displaySize - 1 + r - 1 && placed < processorsToPlace; j++) {
-                    placed += tryPlaceProcessor(dispX - r, j, i, placed, processorsToPlace);
-                    placed += tryPlaceProcessor(dispX + displaySize - 1 + r, j, i, placed, processorsToPlace);
+        WebLogger.info("Запуск стратегического алгоритма с приоритетом по нужде...");
+        List<Point2> allPossibleSpots = new ArrayList<>();
+        for (int y = 0; y < n; y++) {
+            for (int x = 0; x < m; x++) {
+                if (matrix[y][x].type == 0 && isWithinProcessorReachOfAnyDisplay(new Point2(x, y))) {
+                    allPossibleSpots.add(new Point2(x, y));
                 }
             }
         }
-    }
+        WebLogger.info("Найдено " + allPossibleSpots.size() + " возможных мест для процессоров.");
 
-    private int tryPlaceProcessor(int x, int y, int ownerId, int placed, int toPlace) {
-        if (placed < toPlace && y >= 0 && y < m && x >= 0 && x < n && matrix[y][x].type == 0) {
-            matrix[y][x].type = 1;
-            matrix[y][x].ownerId = ownerId;
-            matrix[y][x].processorIndex = placed;
-            return 1;
-        }
-        return 0;
-    }
+        boolean[][] isSpotTaken = new boolean[n][m];
+        List<DisplayInfo> sortedDisplays = new ArrayList<>();
+        for (DisplayInfo d : displays) sortedDisplays.add(d);
+        sortedDisplays.sort(Comparator.comparingInt(DisplayInfo::getProcessorsNeeded).reversed());
 
-    public Cell[][] getMatrix() { return matrix; }
-    // Метод возвращает DPoint[]
-    public DPoint[] getDisplays() { return displays; }
+        for (DisplayInfo display : sortedDisplays) {
+            int needed = display.getProcessorsNeeded();
+            if (needed == 0) continue;
 
-    public static class Cell {
-        public int type = 0;
-        public int ownerId = -1;
-        public int processorIndex = -1;
-    }
-
-    public static int calculateMaxAvailableProcessors(int n, int m, int displaySize) {
-        DisplayMatrix displayMatrix = new DisplayMatrix();
-        MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(n, m, displaySize, PROCESSOR_REACH);
-
-        Cell[][] matrix = new Cell[blueprint.m][blueprint.n];
-        for (int i = 0; i < blueprint.m; i++) {
-            for (int j = 0; j < blueprint.n; j++) {
-                matrix[i][j] = new Cell();
-            }
-        }
-
-        for (int i = 0; i < blueprint.displayBottomLefts.length; i++) {
-            DPoint p = blueprint.displayBottomLefts[i];
-            for (int row = (int)p.y; row < (int)p.y + displaySize; row++) {
-                for (int col = (int)p.x; col < (int)p.x + displaySize; col++) {
-                    if (row < blueprint.m && col < blueprint.n) {
-                        matrix[row][col].type = 2;
+            List<Spot> potentialSpots = new ArrayList<>();
+            for (Point2 spotLoc : allPossibleSpots) {
+                if (!isSpotTaken[spotLoc.y][spotLoc.x]) {
+                    double distSq = distanceSqFromPointToRectangle(spotLoc, display);
+                    if (distSq <= PROCESSOR_REACH_SQ) {
+                        potentialSpots.add(new Spot(spotLoc, distSq));
                     }
                 }
             }
-        }
+            potentialSpots.sort(Comparator.comparingDouble(s -> s.distanceSq));
 
-        int availableSlots = 0;
-        for (int i = 0; i < blueprint.m; i++) {
-            for (int j = 0; j < blueprint.n; j++) {
-                if (matrix[i][j].type == 0) {
-                    availableSlots++;
+            int placedCount = 0;
+            for (Spot spot : potentialSpots) {
+                if (placedCount >= needed) break;
+                Point2 loc = spot.location;
+                if (!isSpotTaken[loc.y][loc.x]) {
+                    matrix[loc.y][loc.x].type = 1;
+                    matrix[loc.y][loc.x].ownerId = display.id;
+                    matrix[loc.y][loc.x].processorIndex = display.processorsPlaced;
+                    display.processorsPlaced++;
+                    isSpotTaken[loc.y][loc.x] = true;
+                    placedCount++;
                 }
             }
+            if (placedCount < needed) {
+                WebLogger.warn("   -> ВНИМАНИЕ: Дисплей " + display.id + " получил только " + placedCount + " из " + needed + " процессоров. Не хватило физического места.");
+            }
         }
-        return availableSlots;
+        WebLogger.info("Размещение требуемых процессоров завершено.");
+    }
+
+    // ИСПРАВЛЕНИЕ: Делаем метод public для доступа из ModUI
+    public boolean isWithinProcessorReachOfAnyDisplay(Point2 p) {
+        for (DisplayInfo display : displays) {
+            if (distanceSqFromPointToRectangle(p, display) <= PROCESSOR_REACH_SQ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private double distanceSqFromPointToRectangle(Point2 p, DisplayInfo display) {
+        int minX = display.bottomLeft.x;
+        int maxX = display.bottomLeft.x + displaySize - 1;
+        int minY = display.bottomLeft.y;
+        int maxY = display.bottomLeft.y + displaySize - 1;
+        
+        double closestX = Math.max(minX, Math.min(p.x, maxX));
+        double closestY = Math.max(minY, Math.min(p.y, maxY));
+        
+        double dx = p.x - closestX;
+        double dy = p.y - closestY;
+        
+        return dx * dx + dy * dy;
     }
 }
 EOF
 
-# --- Обновление ProcessingResult.java ---
+# --- 3. Исправляем ProcessingResult.java (поля и конструктор) ---
 cat << 'EOF' > src/main/java/com/mkso4ka/mindustry/matrixproc/ProcessingResult.java
 package com.mkso4ka.mindustry.matrixproc;
 
 import mindustry.game.Schematic;
-// Используем DPoint из библиотеки триангуляции
-import org.waveware.delaunator.DPoint;
 
 public class ProcessingResult {
     public final Schematic schematic;
     public final DisplayProcessorMatrixFinal.Cell[][] matrix;
-    // Поле должно быть типа DPoint[]
-    public final DPoint[] displays;
+    // ИСПРАВЛЕНИЕ: Тип поля теперь DisplayInfo[]
+    public final DisplayInfo[] displays;
     public final int displaySize;
+    // ИСПРАВЛЕНИЕ: Добавляем недостающие поля
+    public final int matrixWidth;
+    public final int matrixHeight;
 
-    public ProcessingResult(Schematic schematic, DisplayProcessorMatrixFinal.Cell[][] matrix, DPoint[] displays, int displaySize) {
+    // ИСПРАВЛЕНИЕ: Конструктор принимает DisplayInfo[]
+    public ProcessingResult(Schematic schematic, DisplayProcessorMatrixFinal.Cell[][] matrix, DisplayInfo[] displays, int displaySize) {
         this.schematic = schematic;
         this.matrix = matrix;
         this.displays = displays;
         this.displaySize = displaySize;
+        this.matrixHeight = matrix.length;
+        this.matrixWidth = matrix[0].length;
     }
 }
 EOF
 
-# --- Обновление LogicCore.java ---
+# --- 4. Исправляем LogicCore.java (интеграция и исправление ошибок) ---
 cat << 'EOF' > src/main/java/com/mkso4ka/mindustry/matrixproc/LogicCore.java
 package com.mkso4ka.mindustry.matrixproc;
 
@@ -231,11 +216,8 @@ import mindustry.world.Tile;
 import mindustry.world.blocks.logic.LogicBlock;
 import mindustry.world.blocks.logic.LogicBlock.LogicLink;
 import mindustry.world.blocks.logic.LogicDisplay;
-// Используем DPoint из библиотеки триангуляции
-import org.waveware.delaunator.DPoint;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
@@ -254,7 +236,7 @@ public class LogicCore {
         }
     }
 
-    public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, double detail, int maxInstructions, boolean useTransparentBg, final AtomicBoolean cancellationToken) {
+    public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, double tolerance, int maxInstructions, int diffusionIterations, float diffusionContrast, boolean useTransparentBg, final AtomicBoolean cancellationToken) {
         ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
         try {
             WebLogger.clearDebugImages();
@@ -263,15 +245,16 @@ public class LogicCore {
             Pixmap masterPixmap = new Pixmap(imageFile);
             int displaySize = displayBlock.size;
             int displayPixelSize = getDisplayPixelSize(displaySize);
-            int totalDisplayWidth = displaysX * displayPixelSize;
-            int totalDisplayHeight = displaysY * displayPixelSize;
+            int totalWidth = (displaysX * displayPixelSize) + (Math.max(0, displaysX - 1) * BORDER_SIZE * 2);
+            int totalHeight = (displaysY * displayPixelSize) + (Math.max(0, displaysY - 1) * BORDER_SIZE * 2);
 
-            Pixmap scaledMasterPixmap = new Pixmap(totalDisplayWidth, totalDisplayHeight);
-            scaledMasterPixmap.draw(masterPixmap, 0, 0, masterPixmap.width, masterPixmap.height, 0, 0, totalDisplayWidth, totalDisplayHeight);
+            Pixmap scaledMasterPixmap = new Pixmap(totalWidth, totalHeight);
+            scaledMasterPixmap.draw(masterPixmap, 0, 0, masterPixmap.width, masterPixmap.height, 0, 0, totalWidth, totalHeight);
             masterPixmap.dispose();
 
             DisplayMatrix displayMatrix = new DisplayMatrix();
-            MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, DisplayProcessorMatrixFinal.PROCESSOR_REACH);
+            // ИСПРАВЛЕНИЕ: Передаем int в placeDisplaysXxY
+            MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, (int)DisplayProcessorMatrixFinal.PROCESSOR_REACH);
 
             List<Future<SliceProcessingResult>> futures = new ArrayList<>();
 
@@ -287,18 +270,14 @@ public class LogicCore {
                     final int currentJ = j;
 
                     Callable<SliceProcessingResult> task = () -> {
-                        int displayStartX = currentJ * displayPixelSize;
-                        int displayStartY = currentI * displayPixelSize;
-                        int sliceStartX = Math.max(0, displayStartX - BORDER_SIZE);
-                        int sliceStartY = Math.max(0, displayStartY - BORDER_SIZE);
-                        int sliceEndX = Math.min(totalDisplayWidth, displayStartX + displayPixelSize + BORDER_SIZE);
-                        int sliceEndY = Math.min(totalDisplayHeight, displayStartY + displayPixelSize + BORDER_SIZE);
-                        int sliceWidth = sliceEndX - sliceStartX;
-                        int sliceHeight = sliceEndY - sliceStartY;
-
+                        int sliceWidth = displayPixelSize + (currentJ > 0 ? BORDER_SIZE : 0) + (currentJ < displaysX - 1 ? BORDER_SIZE : 0);
+                        int sliceHeight = displayPixelSize + (currentI > 0 ? BORDER_SIZE : 0) + (currentI < displaysY - 1 ? BORDER_SIZE : 0);
+                        int subX = currentJ * (displayPixelSize + BORDER_SIZE * 2) - (currentJ > 0 ? BORDER_SIZE : 0);
+                        int subY = currentI * (displayPixelSize + BORDER_SIZE * 2) - (currentI > 0 ? BORDER_SIZE : 0);
+                        
                         Pixmap finalSlice = new Pixmap(sliceWidth, sliceHeight);
                         synchronized (scaledMasterPixmap) {
-                            finalSlice.draw(scaledMasterPixmap, sliceStartX, sliceStartY, sliceWidth, sliceHeight, 0, 0, sliceWidth, sliceHeight);
+                            finalSlice.draw(scaledMasterPixmap, subX, subY, sliceWidth, sliceHeight, 0, 0, sliceWidth, sliceHeight);
                         }
 
                         if (useTransparentBg) {
@@ -311,10 +290,12 @@ public class LogicCore {
                         }
 
                         ImageProcessor imageProc = new ImageProcessor(finalSlice);
-                        ImageProcessor.ProcessingSteps steps = imageProc.process(detail, displayIndex);
+                        ImageProcessor.ProcessingSteps steps = imageProc.process(tolerance, diffusionIterations, diffusionContrast);
                         finalSlice.dispose();
 
-                        List<String> allCommands = generateTriangleCommandList(steps.result, displayPixelSize, sliceStartX, sliceStartY, displayStartX, displayStartY);
+                        int offsetX = (currentJ > 0) ? BORDER_SIZE : 0;
+                        int offsetY = (currentI > 0) ? BORDER_SIZE : 0;
+                        List<String> allCommands = generateTriangleCommandList(steps.result, displayPixelSize, offsetX, offsetY);
                         List<String> finalProcessorCodes = splitCommandsIntoChunks(allCommands, maxInstructions);
                         
                         return new SliceProcessingResult(displayIndex, finalProcessorCodes);
@@ -389,16 +370,11 @@ public class LogicCore {
         return finalProcessorCodes;
     }
 
-    private Schematic buildSchematic(DisplayProcessorMatrixFinal.Cell[][] matrix, DPoint[] displays, Map<Integer, List<String>> codeMap, Block displayBlock) {
+    private Schematic buildSchematic(DisplayProcessorMatrixFinal.Cell[][] matrix, DisplayInfo[] displays, Map<Integer, List<String>> codeMap, Block displayBlock) {
         Seq<Stile> tiles = new Seq<>();
         int height = matrix.length;
         int width = matrix[0].length;
         int processorCount = 0;
-
-        DisplayInfo[] displayInfos = new DisplayInfo[displays.length];
-        for(int i = 0; i < displays.length; i++){
-            displayInfos[i] = new DisplayInfo(displays[i], i);
-        }
 
         for (int row = 0; row < height; row++) {
             for (int col = 0; col < width; col++) {
@@ -406,7 +382,7 @@ public class LogicCore {
                 if (cell.type == 1 && cell.ownerId >= 0 && cell.processorIndex >= 0) {
                     short schemX = (short)col;
                     short schemY = (short)row;
-                    DisplayInfo ownerDisplay = displayInfos[cell.ownerId];
+                    DisplayInfo ownerDisplay = displays[cell.ownerId];
                     
                     String code = "### ERROR: Code not found ###";
                     List<String> codesForDisplay = codeMap.get(cell.ownerId);
@@ -419,15 +395,15 @@ public class LogicCore {
 
                     LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
                     build.tile = new Tile(schemX, schemY);
-
-                    int displayMinX = (int)ownerDisplay.bottomLeft.x;
-                    int displayMinY = (int)ownerDisplay.bottomLeft.y;
-                    int displayMaxX = (int)ownerDisplay.bottomLeft.x + displayBlock.size - 1;
-                    int displayMaxY = (int)ownerDisplay.bottomLeft.y + displayBlock.size - 1;
+                    
+                    int displayMinX = ownerDisplay.bottomLeft.x;
+                    int displayMinY = ownerDisplay.bottomLeft.y;
+                    int displayMaxX = ownerDisplay.bottomLeft.x + displayBlock.size - 1;
+                    int displayMaxY = ownerDisplay.bottomLeft.y + displayBlock.size - 1;
                     int linkToX = Math.max(displayMinX, Math.min(schemX, displayMaxX));
                     int linkToY = Math.max(displayMinY, Math.min(schemY, displayMaxY));
-                    build.links.add(new LogicLink(linkToX, linkToY, "display1", true));
                     
+                    build.links.add(new LogicLink(linkToX, linkToY, "display1", true));
                     build.updateCode(code);
                     tiles.add(new Stile(Blocks.microProcessor, schemX, schemY, build.config(), (byte) 0));
                     processorCount++;
@@ -435,7 +411,7 @@ public class LogicCore {
             }
         }
 
-        for (DisplayInfo display : displayInfos) {
+        for (DisplayInfo display : displays) {
             short finalX = (short)display.bottomLeft.x;
             short finalY = (short)display.bottomLeft.y;
             if (displayBlock.size == 6) { finalX += 2; finalY += 2; }
@@ -443,14 +419,14 @@ public class LogicCore {
             tiles.add(new Stile(displayBlock, finalX, finalY, null, (byte) 0));
         }
         
-        WebLogger.info("[Schematic Stats] Total objects placed: %d (%d displays, %d processors)", displayInfos.length + processorCount, displayInfos.length, processorCount);
+        WebLogger.info("[Schematic Stats] Total objects placed: %d (%d displays, %d processors)", displays.length + processorCount, displays.length, processorCount);
 
         StringMap tags = new StringMap();
         tags.put("name", "PictureToLogic-Schematic");
         return new Schematic(tiles, tags, width, height);
     }
 
-    private List<String> generateTriangleCommandList(Map<Integer, List<ImageProcessor.Triangle>> triangles, int displayPixelSize, int sliceStartX, int sliceStartY, int displayStartX, int displayStartY) {
+    private List<String> generateTriangleCommandList(Map<Integer, List<ImageProcessor.Triangle>> triangles, int displayPixelSize, int offsetX, int offsetY) {
         List<String> commands = new ArrayList<>();
         int maxCoord = displayPixelSize - 1;
         for (Map.Entry<Integer, List<ImageProcessor.Triangle>> entry : triangles.entrySet()) {
@@ -458,24 +434,20 @@ public class LogicCore {
             if (!triangleList.isEmpty()) {
                 commands.add(formatColorCommand(entry.getKey()));
                 for (ImageProcessor.Triangle t : triangleList) {
-                    int globalX1 = sliceStartX + t.x1;
-                    int globalY1 = sliceStartY + t.y1;
-                    int globalX2 = sliceStartX + t.x2;
-                    int globalY2 = sliceStartY + t.y2;
-                    int globalX3 = sliceStartX + t.x3;
-                    int globalY3 = sliceStartY + t.y3;
-                    int localX1 = globalX1 - displayStartX;
-                    int localY1 = globalY1 - displayStartY;
-                    int localX2 = globalX2 - displayStartX;
-                    int localY2 = globalY2 - displayStartY;
-                    int localX3 = globalX3 - displayStartX;
-                    int localY3 = globalY3 - displayStartY;
-                    int x1 = Math.max(0, Math.min(maxCoord, localX1));
-                    int y1 = maxCoord - Math.max(0, Math.min(maxCoord, localY1));
-                    int x2 = Math.max(0, Math.min(maxCoord, localX2));
-                    int y2 = maxCoord - Math.max(0, Math.min(maxCoord, localY2));
-                    int x3 = Math.max(0, Math.min(maxCoord, localX3));
-                    int y3 = maxCoord - Math.max(0, Math.min(maxCoord, localY3));
+                    int raw_x1 = t.x1 - offsetX;
+                    int raw_y1 = displayPixelSize - 1 - (t.y1 - offsetY);
+                    int raw_x2 = t.x2 - offsetX;
+                    int raw_y2 = displayPixelSize - 1 - (t.y2 - offsetY);
+                    int raw_x3 = t.x3 - offsetX;
+                    int raw_y3 = displayPixelSize - 1 - (t.y3 - offsetY);
+
+                    int x1 = Math.max(0, Math.min(maxCoord, raw_x1));
+                    int y1 = Math.max(0, Math.min(maxCoord, raw_y1));
+                    int x2 = Math.max(0, Math.min(maxCoord, raw_x2));
+                    int y2 = Math.max(0, Math.min(maxCoord, raw_y2));
+                    int x3 = Math.max(0, Math.min(maxCoord, raw_x3));
+                    int y3 = Math.max(0, Math.min(maxCoord, raw_y3));
+                    
                     commands.add(String.format("draw triangle %d %d %d %d %d %d 0 0", x1, y1, x2, y2, x3, y3));
                 }
             }
@@ -498,4 +470,277 @@ public class LogicCore {
 }
 EOF
 
-echo "Все файлы успешно обновлены!"
+# --- 5. Исправляем ModUI.java (исправляем ошибки компиляции в расчете статистики) ---
+cat << 'EOF' > src/main/java/com/mkso4ka/mindustry/matrixproc/ModUI.java
+package com.mkso4ka.mindustry.matrixproc;
+
+import arc.Core;
+import arc.files.Fi;
+import arc.math.geom.Point2;
+import arc.scene.ui.*;
+import arc.scene.ui.layout.Cell;
+import arc.scene.ui.layout.Table;
+import mindustry.Vars;
+import mindustry.content.Blocks;
+import mindustry.gen.Icon;
+import mindustry.gen.Tex;
+import mindustry.ui.Styles;
+import mindustry.ui.dialogs.BaseDialog;
+import mindustry.world.blocks.logic.LogicDisplay;
+
+import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+public class ModUI {
+
+    private static LogicDisplay selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay;
+    private static Slider xSlider, ySlider, toleranceSlider, instructionsSlider, diffusionIterSlider, diffusionKSlider;
+    private static Label xLabel, yLabel, toleranceLabel, instructionsLabel, diffusionIterLabel, diffusionKLabel;
+    private static CheckBox transparentBgCheck;
+    private static Table previewTable;
+    private static Label availableProcessorsLabel, requiredProcessorsLabel, statusLabel;
+    
+    private static final AtomicBoolean cancellationToken = new AtomicBoolean(false);
+
+    public static void build() {
+        try {
+            Table schematicsButtons = Vars.ui.schematics.buttons;
+            Cell<TextButton> buttonCell = schematicsButtons.button("PictureToLogic", Icon.image, ModUI::showSettingsDialog);
+            buttonCell.size(180, 64).padLeft(6);
+        } catch (Exception e) {
+            WebLogger.err("Failed to build PictureToLogic UI!", e);
+        }
+    }
+
+    private static void showSettingsDialog() {
+        BaseDialog dialog = new BaseDialog("Настройки PictureToLogic");
+        dialog.addCloseButton();
+        Table content = dialog.cont;
+        content.defaults().pad(4);
+        Table mainTable = new Table();
+        Table leftPanel = new Table();
+        leftPanel.defaults().pad(2).left();
+
+        leftPanel.add("[accent]1. Настройки сетки[]").colspan(3).row();
+        xSlider = new Slider(1, 10, 1, false);
+        ySlider = new Slider(1, 10, 1, false);
+        xLabel = new Label("1"); yLabel = new Label("1");
+        leftPanel.add("Дисплеев по X:");
+        leftPanel.add(xSlider).width(200f).pad(5);
+        leftPanel.add(xLabel).row();
+        leftPanel.add("Дисплеев по Y:");
+        leftPanel.add(ySlider).width(200f).pad(5);
+        leftPanel.add(yLabel).row();
+
+        leftPanel.add("[accent]2. Оптимизация изображения[]").colspan(3).padTop(15).row();
+        transparentBgCheck = new CheckBox(" Прозрачный фон");
+        transparentBgCheck.setChecked(true);
+        leftPanel.add(transparentBgCheck).colspan(3).left().row();
+        diffusionIterSlider = new Slider(0, 10, 1, false);
+        diffusionIterSlider.setValue(5);
+        diffusionIterLabel = new Label("5");
+        leftPanel.add("Сила сглаживания:");
+        leftPanel.add(diffusionIterSlider).width(200f).pad(5);
+        leftPanel.add(diffusionIterLabel).row();
+        diffusionKSlider = new Slider(1, 25, 0.5f, false);
+        diffusionKSlider.setValue(10);
+        diffusionKLabel = new Label("10.0");
+        leftPanel.add("Сохранение краев:");
+        leftPanel.add(diffusionKSlider).width(200f).pad(5);
+        leftPanel.add(diffusionKLabel).row();
+        toleranceSlider = new Slider(0, 3, 0.1f, false);
+        toleranceSlider.setValue(1.5f);
+        toleranceLabel = new Label("1.5");
+        leftPanel.add("Допуск цвета (Delta E):");
+        leftPanel.add(toleranceSlider).width(200f).pad(5);
+        leftPanel.add(toleranceLabel).row();
+
+        leftPanel.add("[accent]3. Настройки вывода[]").colspan(3).padTop(15).row();
+        instructionsSlider = new Slider(100, 1000, 100, false);
+        instructionsSlider.setValue(1000);
+        instructionsLabel = new Label("1000");
+        leftPanel.add("Макс. инструкций:");
+        leftPanel.add(instructionsSlider).width(200f).pad(5);
+        leftPanel.add(instructionsLabel).row();
+        
+        leftPanel.add("[accent]4. Статистика процессоров[]").colspan(3).padTop(15).row();
+        availableProcessorsLabel = new Label("");
+        requiredProcessorsLabel = new Label("");
+        statusLabel = new Label("");
+        leftPanel.add(availableProcessorsLabel).colspan(3).row();
+        leftPanel.add(requiredProcessorsLabel).colspan(3).row();
+        leftPanel.add(statusLabel).colspan(3).padTop(5).row();
+
+        Table rightPanel = new Table();
+        previewTable = new Table();
+        previewTable.setBackground(Tex.buttonDown);
+        rightPanel.add(previewTable).size(150).padBottom(10).row();
+        Table displaySelector = new Table();
+        ButtonGroup<TextButton> group = new ButtonGroup<>();
+        group.setMinCheckCount(1);
+        TextButton logicDisplayButton = new TextButton("3x3", Styles.togglet);
+        logicDisplayButton.clicked(() -> { selectedDisplay = (LogicDisplay) Blocks.logicDisplay; updateProcessorEstimationLabels(); });
+        TextButton largeLogicDisplayButton = new TextButton("6x6", Styles.togglet);
+        largeLogicDisplayButton.clicked(() -> { selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay; updateProcessorEstimationLabels(); });
+        group.add(logicDisplayButton, largeLogicDisplayButton);
+        if (selectedDisplay == Blocks.largeLogicDisplay) largeLogicDisplayButton.setChecked(true);
+        else logicDisplayButton.setChecked(true);
+        displaySelector.add(logicDisplayButton).size(70, 60);
+        displaySelector.add(largeLogicDisplayButton).size(70, 60).padLeft(10);
+        rightPanel.add("Тип дисплея:").row();
+        rightPanel.add(displaySelector).row();
+
+        mainTable.add(leftPanel);
+        mainTable.add(rightPanel).padLeft(20);
+        content.add(mainTable).row();
+        Table bottomPanel = new Table();
+        if (WebLogger.ENABLE_WEB_LOGGER) {
+            bottomPanel.button("Открыть панель отладки", Icon.zoom, () -> Core.app.openURI("http://localhost:8080/")).growX();
+        }
+        content.add(bottomPanel).growX().padTop(15).row();
+        Runnable fileChooserAction = () -> WebLogger.logFileChooser(file -> {
+            if (file != null) {
+                dialog.hide();
+                generateAndShowSchematic(file);
+            }
+        });
+        content.button("Выбрать и создать чертеж", Icon.file, fileChooserAction).padTop(10).growX().height(60);
+
+        xSlider.changed(() -> { xLabel.setText(String.valueOf((int)xSlider.getValue())); updatePreview(); updateProcessorEstimationLabels(); });
+        ySlider.changed(() -> { yLabel.setText(String.valueOf((int)ySlider.getValue())); updatePreview(); updateProcessorEstimationLabels(); });
+        toleranceSlider.changed(() -> { toleranceLabel.setText(String.format("%.1f", toleranceSlider.getValue())); updateProcessorEstimationLabels(); });
+        instructionsSlider.changed(() -> { instructionsLabel.setText(String.valueOf((int)instructionsSlider.getValue())); updateProcessorEstimationLabels(); });
+        diffusionIterSlider.changed(() -> diffusionIterLabel.setText(String.valueOf((int)diffusionIterSlider.getValue())));
+        diffusionKSlider.changed(() -> diffusionKLabel.setText(String.format("%.1f", diffusionKSlider.getValue())));
+        
+        updatePreview();
+        updateProcessorEstimationLabels();
+        dialog.show();
+    }
+    
+    private static void updateProcessorEstimationLabels() {
+        int displaysX = (int) xSlider.getValue();
+        int displaysY = (int) ySlider.getValue();
+        int displaySize = selectedDisplay.size;
+        double tolerance = toleranceSlider.getValue();
+        int maxInstructions = (int) instructionsSlider.getValue();
+        
+        DisplayMatrix displayMatrix = new DisplayMatrix();
+        // ИСПРАВЛЕНИЕ: Передаем int вместо double
+        MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, (int)DisplayProcessorMatrixFinal.PROCESSOR_REACH);
+        DisplayProcessorMatrixFinal tempMatrix = new DisplayProcessorMatrixFinal(blueprint.n, blueprint.m, new int[displaysX*displaysY], blueprint.displayBottomLefts, displaySize);
+        
+        int availableSlots = 0;
+        // ИСПРАВЛЕНИЕ: Правильный цикл для итерации по матрице
+        for (int y = 0; y < blueprint.n; y++) {
+            for (int x = 0; x < blueprint.m; x++) {
+                if (tempMatrix.getMatrix()[y][x].type == 0 && tempMatrix.isWithinProcessorReachOfAnyDisplay(new Point2(x, y))) {
+                    availableSlots++;
+                }
+            }
+        }
+        availableProcessorsLabel.setText("Максимум доступно процессоров: [accent]" + availableSlots + "[]");
+
+        int maxPoints = (int)(5000 - tolerance * 1500);
+        double commandsPerSlice = maxPoints * 2.1; 
+        int requiredPerSlice = (int)Math.ceil(commandsPerSlice / (maxInstructions - 1));
+        int totalRequired = requiredPerSlice * displaysX * displaysY;
+        requiredProcessorsLabel.setText("Примерно потребуется: [accent]" + totalRequired + "[]");
+
+        if (totalRequired <= availableSlots) {
+            statusLabel.setText("Статус: [green]OK, места должно хватить.[]");
+        } else if (totalRequired <= availableSlots * 1.2) {
+            statusLabel.setText("Статус: [yellow]ВНИМАНИЕ! Может не хватить места.[]");
+        } else {
+            statusLabel.setText("Статус: [red]ОШИБКА! Места точно не хватит.[]");
+        }
+    }
+
+    private static void updatePreview() {
+        int x = (int) xSlider.getValue();
+        int y = (int) ySlider.getValue();
+        previewTable.clear();
+        for (int i = 0; i < y; i++) {
+            for (int j = 0; j < x; j++) {
+                previewTable.add(new Image(Styles.black6)).size(24).pad(2);
+            }
+            previewTable.row();
+        }
+    }
+
+    private static void generateAndShowSchematic(Fi imageFile) {
+        BaseDialog progressDialog = new BaseDialog("Обработка");
+        progressDialog.cont.add("Идет обработка изображения...").pad(20).row();
+        progressDialog.buttons.button("Отмена", Icon.cancel, () -> {
+            cancellationToken.set(true);
+            progressDialog.hide();
+        }).size(200, 50);
+        progressDialog.show();
+
+        cancellationToken.set(false);
+
+        new Thread(() -> {
+            ProcessingResult result = null;
+            try {
+                int displaysX = (int) xSlider.getValue();
+                int displaysY = (int) ySlider.getValue();
+                double tolerance = toleranceSlider.getValue();
+                int maxInstructions = (int)instructionsSlider.getValue();
+                int diffusionIterations = (int)diffusionIterSlider.getValue();
+                float diffusionContrast = diffusionKSlider.getValue();
+                boolean useTransparentBg = transparentBgCheck.isChecked();
+
+                LogicCore logic = new LogicCore();
+                result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay, tolerance, maxInstructions, diffusionIterations, diffusionContrast, useTransparentBg, cancellationToken);
+            } catch (Exception e) {
+                WebLogger.err("Критическая ошибка при создании чертежа!", e);
+            } finally {
+                progressDialog.hide();
+                
+                ProcessingResult finalResult = result;
+                Core.app.post(() -> {
+                    if (cancellationToken.get()) {
+                        WebLogger.info("Processing was cancelled by the user. No schematic will be shown.");
+                        return;
+                    }
+
+                    if (finalResult != null && finalResult.schematic != null) {
+                        showConfirmationDialog(finalResult);
+                    } else {
+                        Vars.ui.showInfo("[red]Не удалось создать чертеж.[]\nПроверьте логи для получения подробной информации.");
+                        WebLogger.err("Failed to create schematic. Check logs for details.");
+                    }
+                });
+            }
+        }).start();
+    }
+    
+    private static void showConfirmationDialog(ProcessingResult result) {
+        BaseDialog confirmDialog = new BaseDialog("Результат");
+        
+        int processorCount = (int) Arrays.stream(result.matrix).flatMap(Arrays::stream).filter(c -> c.type == 1 && c.processorIndex >= 0).count();
+        
+        Table cont = confirmDialog.cont;
+        cont.add("[accent]Чертеж готов![]").colspan(2).row();
+        cont.add("Размер схемы:").left().padTop(10);
+        cont.add(String.format("%d x %d", result.matrixWidth, result.matrixHeight)).right().row();
+        cont.add("Количество дисплеев:").left();
+        cont.add(String.valueOf(result.displays.length)).right().row();
+        cont.add("Количество процессоров:").left();
+        cont.add(String.valueOf(processorCount)).right().row();
+        
+        confirmDialog.buttons.button("Разместить чертеж", Icon.ok, () -> {
+            confirmDialog.hide();
+            Vars.ui.schematics.hide();
+            Vars.control.input.useSchematic(result.schematic);
+            WebLogger.info("Schematic built and placed successfully.");
+        }).size(240, 50);
+        
+        confirmDialog.buttons.button("Отмена", Icon.cancel, confirmDialog::hide).size(160, 50);
+        
+        confirmDialog.show();
+    }
+}
+EOF
+
+echo "Все файлы успешно обновлены! Пожалуйста, попробуйте запустить сборку снова."

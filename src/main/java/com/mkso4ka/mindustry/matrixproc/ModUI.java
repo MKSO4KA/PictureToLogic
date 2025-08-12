@@ -151,12 +151,13 @@ public class ModUI {
         double tolerance = toleranceSlider.getValue();
         int maxInstructions = (int) instructionsSlider.getValue();
         
-        // ИСПРАВЛЕНИЕ: Используем вашу правильную логику для расчета
         DisplayMatrix displayMatrix = new DisplayMatrix();
-        MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, DisplayProcessorMatrixFinal.PROCESSOR_REACH);
+        // ИСПРАВЛЕНИЕ: Передаем int вместо double
+        MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, (int)DisplayProcessorMatrixFinal.PROCESSOR_REACH);
         DisplayProcessorMatrixFinal tempMatrix = new DisplayProcessorMatrixFinal(blueprint.n, blueprint.m, new int[displaysX*displaysY], blueprint.displayBottomLefts, displaySize);
         
         int availableSlots = 0;
+        // ИСПРАВЛЕНИЕ: Правильный цикл для итерации по матрице
         for (int y = 0; y < blueprint.n; y++) {
             for (int x = 0; x < blueprint.m; x++) {
                 if (tempMatrix.getMatrix()[y][x].type == 0 && tempMatrix.isWithinProcessorReachOfAnyDisplay(new Point2(x, y))) {

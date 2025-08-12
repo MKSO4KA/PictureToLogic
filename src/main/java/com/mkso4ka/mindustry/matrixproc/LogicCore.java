@@ -49,7 +49,8 @@ public class LogicCore {
             masterPixmap.dispose();
 
             DisplayMatrix displayMatrix = new DisplayMatrix();
-            MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, DisplayProcessorMatrixFinal.PROCESSOR_REACH);
+            // ИСПРАВЛЕНИЕ: Передаем int в placeDisplaysXxY
+            MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, (int)DisplayProcessorMatrixFinal.PROCESSOR_REACH);
 
             List<Future<SliceProcessingResult>> futures = new ArrayList<>();
 
@@ -85,14 +86,12 @@ public class LogicCore {
                         }
 
                         ImageProcessor imageProc = new ImageProcessor(finalSlice);
-                        // ИСПРАВЛЕНИЕ: Передаем правильные аргументы в process
                         ImageProcessor.ProcessingSteps steps = imageProc.process(tolerance, diffusionIterations, diffusionContrast);
                         finalSlice.dispose();
 
                         int offsetX = (currentJ > 0) ? BORDER_SIZE : 0;
                         int offsetY = (currentI > 0) ? BORDER_SIZE : 0;
                         List<String> allCommands = generateTriangleCommandList(steps.result, displayPixelSize, offsetX, offsetY);
-                        // ИСПРАВЛЕНИЕ: Используем новый "умный" алгоритм нарезки
                         List<String> finalProcessorCodes = splitCommandsIntoChunks(allCommands, maxInstructions);
                         
                         return new SliceProcessingResult(displayIndex, finalProcessorCodes);
@@ -117,7 +116,6 @@ public class LogicCore {
             
             scaledMasterPixmap.dispose();
 
-            // ИСПРАВЛЕНИЕ: Все типы теперь совпадают
             DisplayProcessorMatrixFinal matrixFinal = new DisplayProcessorMatrixFinal(blueprint.n, blueprint.m, processorsPerDisplay, blueprint.displayBottomLefts, displaySize);
             matrixFinal.placeProcessors();
             
@@ -194,7 +192,6 @@ public class LogicCore {
                     LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
                     build.tile = new Tile(schemX, schemY);
                     
-                    // ИСПРАВЛЕНИЕ: Подключение к ближайшей точке
                     int displayMinX = ownerDisplay.bottomLeft.x;
                     int displayMinY = ownerDisplay.bottomLeft.y;
                     int displayMaxX = ownerDisplay.bottomLeft.x + displayBlock.size - 1;

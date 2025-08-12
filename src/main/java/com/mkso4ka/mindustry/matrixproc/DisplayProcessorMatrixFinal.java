@@ -37,6 +37,7 @@ class DisplayProcessorMatrixFinal {
         this.displays = new DisplayInfo[displayBottomLefts.length];
         for (int i = 0; i < displayBottomLefts.length; i++) {
             Point2 bottomLeft = new Point2(displayBottomLefts[i][0], displayBottomLefts[i][1]);
+            // ИСПРАВЛЕНИЕ: Конструктор теперь соответствует DisplayInfo
             displays[i] = new DisplayInfo(i, bottomLeft, processorsPerDisplay[i]);
             placeSingleDisplay(displays[i]);
         }
@@ -110,7 +111,8 @@ class DisplayProcessorMatrixFinal {
         WebLogger.info("Размещение требуемых процессоров завершено.");
     }
 
-    private boolean isWithinProcessorReachOfAnyDisplay(Point2 p) {
+    // ИСПРАВЛЕНИЕ: Делаем метод public для доступа из ModUI
+    public boolean isWithinProcessorReachOfAnyDisplay(Point2 p) {
         for (DisplayInfo display : displays) {
             if (distanceSqFromPointToRectangle(p, display) <= PROCESSOR_REACH_SQ) {
                 return true;
