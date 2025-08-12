@@ -2,8 +2,8 @@ package com.mkso4ka.mindustry.matrixproc;
 
 import arc.graphics.Color;
 import arc.graphics.Pixmap;
-import com.waveware.delaunator.Delaunator;
-import com.waveware.delaunator.Point;
+import org.waveware.delaunator.Delaunator;
+import org.waveware.delaunator.Point;
 
 import java.util.ArrayList;
 import java.util.HashMap;
