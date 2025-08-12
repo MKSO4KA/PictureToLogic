@@ -17,8 +17,8 @@ public class ModUI {
 
     private static LogicDisplay selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay;
 
-    private static Slider xSlider, ySlider, toleranceSlider, instructionsSlider, diffusionIterSlider, diffusionKSlider;
-    private static Label xLabel, yLabel, toleranceLabel, instructionsLabel, diffusionIterLabel, diffusionKLabel;
+    private static Slider xSlider, ySlider, toleranceSlider, instructionsSlider;
+    private static Label xLabel, yLabel, toleranceLabel, instructionsLabel;
     private static CheckBox transparentBgCheck;
     private static Table previewTable;
 
@@ -44,6 +44,7 @@ public class ModUI {
         Table leftPanel = new Table();
         leftPanel.defaults().pad(2).left();
 
+        // --- СЕТКА ---
         leftPanel.add("[accent]1. Настройки сетки[]").colspan(3).row();
         xSlider = WebLogger.logChange(new Slider(1, 10, 1, false), "Displays X");
         ySlider = WebLogger.logChange(new Slider(1, 10, 1, false), "Displays Y");
@@ -55,33 +56,23 @@ public class ModUI {
         leftPanel.add(ySlider).width(200f).pad(5);
         leftPanel.add(yLabel).row();
 
-        leftPanel.add("[accent]2. Оптимизация изображения[]").colspan(3).padTop(15).row();
-        
+        // --- КАЧЕСТВО ИЗОБРАЖЕНИЯ ---
+        leftPanel.add("[accent]2. Настройки качества[]").colspan(3).padTop(15).row();
+
+        // Переименовываем "Допуск цвета" в "Детализацию" - это интуитивнее
+        toleranceSlider = WebLogger.logChange(new Slider(0.1f, 3, 0.1f, false), "Detail Level");
+        toleranceSlider.setValue(1.5f);
+        toleranceLabel = new Label("1.5");
+        leftPanel.add("Детализация (больше = больше точек):");
+        leftPanel.add(toleranceSlider).width(200f).pad(5);
+        leftPanel.add(toleranceLabel).row();
+
         transparentBgCheck = new CheckBox(" Прозрачный фон (по цвету левого верхнего пикселя)");
         transparentBgCheck.setChecked(true);
         leftPanel.add(transparentBgCheck).colspan(3).left().row();
 
-        diffusionIterSlider = WebLogger.logChange(new Slider(0, 10, 1, false), "Diffusion Iterations");
-        diffusionIterSlider.setValue(5);
-        diffusionIterLabel = new Label("5");
-        leftPanel.add("Сила сглаживания:");
-        leftPanel.add(diffusionIterSlider).width(200f).pad(5);
-        leftPanel.add(diffusionIterLabel).row();
 
-        diffusionKSlider = WebLogger.logChange(new Slider(1, 25, 0.5f, false), "Edge Threshold");
-        diffusionKSlider.setValue(10);
-        diffusionKLabel = new Label("10.0");
-        leftPanel.add("Сохранение краев:");
-        leftPanel.add(diffusionKSlider).width(200f).pad(5);
-        leftPanel.add(diffusionKLabel).row();
-
-        toleranceSlider = WebLogger.logChange(new Slider(0, 3, 0.1f, false), "Color Tolerance");
-        toleranceSlider.setValue(1.5f);
-        toleranceLabel = new Label("1.5");
-        leftPanel.add("Допуск цвета (Delta E):");
-        leftPanel.add(toleranceSlider).width(200f).pad(5);
-        leftPanel.add(toleranceLabel).row();
-
+        // --- ВЫВОД ---
         leftPanel.add("[accent]3. Настройки вывода[]").colspan(3).padTop(15).row();
         instructionsSlider = WebLogger.logChange(new Slider(100, 1000, 100, false), "Max Instructions");
         instructionsSlider.setValue(1000);
@@ -90,11 +81,12 @@ public class ModUI {
         leftPanel.add(instructionsSlider).width(200f).pad(5);
         leftPanel.add(instructionsLabel).row();
 
+        // Правая панель остается без изменений
         Table rightPanel = new Table();
         previewTable = new Table();
         previewTable.setBackground(Tex.buttonDown);
         rightPanel.add(previewTable).size(150).padBottom(10).row();
-        
+
         Table displaySelector = new Table();
         ButtonGroup<TextButton> group = new ButtonGroup<>();
         group.setMinCheckCount(1);
@@ -134,8 +126,6 @@ public class ModUI {
         ySlider.changed(() -> { yLabel.setText(String.valueOf((int)ySlider.getValue())); updatePreview(); });
         toleranceSlider.changed(() -> toleranceLabel.setText(String.format("%.1f", toleranceSlider.getValue())));
         instructionsSlider.changed(() -> instructionsLabel.setText(String.valueOf((int)instructionsSlider.getValue())));
-        diffusionIterSlider.changed(() -> diffusionIterLabel.setText(String.valueOf((int)diffusionIterSlider.getValue())));
-        diffusionKSlider.changed(() -> diffusionKLabel.setText(String.format("%.1f", diffusionKSlider.getValue())));
         updatePreview();
 
         WebLogger.logShow(dialog, "Settings Dialog");
@@ -160,32 +150,28 @@ public class ModUI {
         WebLogger.info("File: %s", imageFile.name());
         WebLogger.info("Grid: %dx%d", (int)xSlider.getValue(), (int)ySlider.getValue());
         WebLogger.info("Display Type: %s", selectedDisplay.name);
+        WebLogger.info("Detail Level: %.1f", toleranceSlider.getValue());
         WebLogger.info("Transparent Background: %s", transparentBgCheck.isChecked());
-        WebLogger.info("Color Tolerance (Delta E): %.1f", toleranceSlider.getValue());
         WebLogger.info("Max Instructions (User): %d", (int)instructionsSlider.getValue());
-        WebLogger.info("Diffusion Iterations: %d", (int)diffusionIterSlider.getValue());
-        WebLogger.info("Diffusion K-value: %.1f", diffusionKSlider.getValue());
 
         new Thread(() -> {
             ProcessingResult result = null;
             try {
                 int displaysX = (int) xSlider.getValue();
                 int displaysY = (int) ySlider.getValue();
-                double tolerance = toleranceSlider.getValue();
+                double detail = toleranceSlider.getValue(); // Теперь это "детализация"
                 int maxInstructions = (int)instructionsSlider.getValue();
-                int diffusionIterations = (int)diffusionIterSlider.getValue();
-                float diffusionContrast = diffusionKSlider.getValue();
                 boolean useTransparentBg = transparentBgCheck.isChecked();
 
                 LogicCore logic = new LogicCore();
-                // --- ИСПРАВЛЕНИЕ: Добавляем useTransparentBg в вызов ---
-                result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay, tolerance, maxInstructions, diffusionIterations, diffusionContrast, useTransparentBg);
+                // --- ИСПРАВЛЕНИЕ: Убираем лишние параметры из вызова ---
+                result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay, detail, maxInstructions, useTransparentBg);
             } catch (Exception e) {
                 WebLogger.err("Критическая ошибка при создании чертежа!", e);
             } finally {
                 Vars.ui.loadfrag.hide();
                 WebLogger.info("--- Image Processing Finished ---");
-                
+
                 ProcessingResult finalResult = result;
                 Core.app.post(() -> {
                     if (finalResult != null && finalResult.schematic != null) {

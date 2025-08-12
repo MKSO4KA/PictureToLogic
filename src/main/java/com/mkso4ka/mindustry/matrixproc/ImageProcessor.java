@@ -23,7 +23,6 @@ public class ImageProcessor {
     private int width;
     private int height;
 
-    // ... (вспомогательные классы Triangle и ProcessingSteps остаются без изменений)
     public static class ProcessingSteps {
         public final Map<Integer, List<Triangle>> result;
         public ProcessingSteps(Map<Integer, List<Triangle>> result) { this.result = result; }
@@ -41,18 +40,19 @@ public class ImageProcessor {
         this.height = pixmap.getHeight();
     }
     
-    public ProcessingSteps process(double tolerance, int diffusionIterations, float diffusionContrast, int displayId) {
-        int maxPoints = (int)(5000 - tolerance * 1500);
+    public ProcessingSteps process(double detail, int displayId) {
+        // Теперь чем выше detail, тем БОЛЬШЕ точек
+        int maxPoints = (int)(500 + detail * 1500);
 
         float[][] edgeMap = sobelEdgeDetect(originalPixmap);
-        logEdgeMap(edgeMap, displayId); // Этот метод не меняем, он работает с Pixmap
+        logEdgeMap(edgeMap, displayId); 
 
         List<DPoint> points = placePoints(edgeMap, maxPoints);
-        logPlacedPoints(points, displayId); // Новый метод с PNGJ
+        logPlacedPoints(points, displayId); 
 
         Delaunator delaunator = new Delaunator(points);
         Map<Integer, List<Triangle>> trianglesByColor = colorTriangles(delaunator, points);
-        logFinalTriangulation(trianglesByColor, displayId); // Новый метод с PNGJ
+        logFinalTriangulation(trianglesByColor, displayId); 
         
         WebLogger.info("Triangulation for display #%d complete. Generated %d triangles.", displayId, delaunator.triangles.length / 3);
         return new ProcessingSteps(trianglesByColor);
@@ -61,7 +61,6 @@ public class ImageProcessor {
     // --- Новые методы логирования с использованием PNGJ ---
 
     private void logPlacedPoints(List<DPoint> points, int displayId) {
-        // 1. Создаем 2D массив пикселей, копируя исходное изображение
         int[][] canvas = new int[height][width];
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
@@ -69,19 +68,17 @@ public class ImageProcessor {
             }
         }
         
-        // 2. Рисуем зеленые точки на нашем "холсте"
         int greenColor = Color.green.rgba();
         for(DPoint p : points) {
             fillRectangleManually(canvas, (int) p.x, (int) p.y, 2, 2, greenColor);
         }
         
-        // 3. Кодируем холст в PNG и отправляем в логгер
         byte[] pngBytes = encodeToPng(canvas);
         WebLogger.logImage(String.format("slice_%d_2_PlacedPoints", displayId), pngBytes);
     }
     
     private void logFinalTriangulation(Map<Integer, List<Triangle>> trianglesByColor, int displayId) {
-        int[][] canvas = new int[height][width]; // Черный фон по умолчанию (0)
+        int[][] canvas = new int[height][width]; 
         
         for (Map.Entry<Integer, List<Triangle>> entry : trianglesByColor.entrySet()) {
             int color = entry.getKey();
@@ -94,13 +91,12 @@ public class ImageProcessor {
         WebLogger.logImage(String.format("slice_%d_3_FinalTriangulation", displayId), pngBytes);
     }
     
-    // --- Метод для кодирования массива пикселей в PNG ---
     private byte[] encodeToPng(int[][] canvas) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        ImageInfo imi = new ImageInfo(width, height, 8, true); // 8-бит, с альфа-каналом
+        ImageInfo imi = new ImageInfo(width, height, 8, true); 
         PngWriter pngw = new PngWriter(baos, imi);
         
-        int[] row = new int[width * 4]; // 4 канала (R,G,B,A)
+        int[] row = new int[width * 4]; 
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 int rgba = canvas[y][x];
@@ -182,7 +178,6 @@ public class ImageProcessor {
         edgePixmap.dispose();
     }
 
-    // --- Старые алгоритмы (sobel, placePoints, colorTriangles) остаются без изменений ---
     private float[][] sobelEdgeDetect(Pixmap source) {
         float[][] gray = new float[width][height]; float[][] edgeMap = new float[width][height];
         for (int y = 0; y < height; y++) { for (int x = 0; x < width; x++) {

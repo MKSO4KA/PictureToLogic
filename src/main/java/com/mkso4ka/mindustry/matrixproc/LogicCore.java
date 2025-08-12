@@ -22,7 +22,7 @@ public class LogicCore {
 
     private static final int BORDER_SIZE = 8;
 
-    public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, double tolerance, int maxInstructions, int diffusionIterations, float diffusionContrast, boolean useTransparentBg) {
+    public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, double detail, int maxInstructions, boolean useTransparentBg) {
         try {
             WebLogger.clearDebugImages();
             WebLogger.clearProcessorCodeLogs();
@@ -69,9 +69,8 @@ public class LogicCore {
                     }
 
                     ImageProcessor processor = new ImageProcessor(finalSlice);
-                    // Стало:
-                    ImageProcessor.ProcessingSteps steps = processor.process(tolerance, diffusionIterations, diffusionContrast, displayIndex);
-    
+                    ImageProcessor.ProcessingSteps steps = processor.process(detail, displayIndex);
+                    
                     int offsetX = (j > 0) ? BORDER_SIZE : 0;
                     int offsetY = (i > 0) ? BORDER_SIZE : 0;
                     List<String> allCommands = generateTriangleCommandList(steps.result, displayPixelSize, offsetX, offsetY);
