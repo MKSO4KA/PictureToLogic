@@ -29,10 +29,11 @@ repositories {
 }
 
 dependencies {
+    // API игры, которое будет доступно при компиляции, но не войдет в итоговый JAR
     compileOnly "com.github.Anuken.Mindustry:core:${mindustryVersion}"
     compileOnly "com.github.Anuken.Arc:arc-core:${mindustryVersion}"
     
-    // --- ГЛАВНОЕ ИЗМЕНЕНИЕ: Подключаем все JAR из папки libs ---
+    // Ваши зависимости, которые ВОЙДУТ в итоговый JAR (так как их нет в игре)
     implementation fileTree(dir: 'libs', include: ['*.jar'])
 }
 
@@ -46,49 +47,69 @@ processResources {
     }
 }
 
+// --- ИСПРАВЛЕННАЯ ЗАДАЧА JAR ---
+// Теперь она собирает "правильный" JAR, а не "толстый"
 jar {
-    // Устанавливаем имя файла
     archiveBaseName = project.name
-
-    // Стратегия обработки дубликатов
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
-    // Добавляем в архив скомпилированные классы и ресурсы (включая mod.hjson)
+    // 1. Добавляем скомпилированные классы и ресурсы нашего мода
     from sourceSets.main.output
 
-    // КЛЮЧЕВОЕ ИЗМЕНЕНИЕ:
-    // Мы добавляем зависимости из 'compileClasspath', а не 'runtimeClasspath'.
-    // Это правильный способ для создания "fat JAR" в данном контексте,
-    // он включает всё необходимое без создания конфликтов.
+    // 2. КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Используем runtimeClasspath.
+    // Это включает только 'implementation' зависимости (ваши JAR-файлы из папки libs),
+    // но ИГНОРИРУЕТ 'compileOnly' зависимости (Mindustry API), что резко уменьшает размер.
     from {
-        configurations.compileClasspath.collect { it.isDirectory() ? it : zipTree(it) }
-    }
-}
-task jarAndroid (type: Jar, dependsOn: jar){
-    archiveBaseName = project.name + "-Android"
-    from(zipTree(jar.archiveFile))
-    doLast{
-        def d8 = new File(System.getenv("ANDROID_HOME"), "build-tools/${findLatestBuildTools()}/d8" + (isWindows ? ".bat" : ""))
-        exec{
-            commandLine d8, "--release", "--output", archiveFile.get().asFile, jar.archiveFile.get().asFile
-        }
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
 }
 
-task deploy(dependsOn: jarAndroid) {
+// Эта задача берет "правильный" JAR и конвертирует все классы в classes.dex
+task createDex(type: Exec) {
+    dependsOn 'jar'
+    // Находим утилиту d8 в Android SDK
+    def d8 = new File(System.getenv("ANDROID_HOME"), "build-tools/${findLatestBuildTools()}/d8" + (isWindows ? ".bat" : ""))
+    
+    // Указываем, куда положить результат
+    def dexOutput = new File(buildDir, "dex/classes.dex")
+    
+    doFirst {
+        // Убеждаемся, что директория существует
+        dexOutput.parentFile.mkdirs()
+    }
+
+    // Запускаем d8, передавая ему наш JAR и путь для выходного файла
+    commandLine d8, "--release", "--output", dexOutput, tasks.jar.archiveFile.get().asFile
+}
+
+// Задача deploy теперь собирает финальный, универсальный JAR для PC и Android
+task deploy(type: Jar, dependsOn: createDex) {
+    // Финальное имя файла без версий и классификаторов
+    archiveBaseName = "PictureToLogic"
+    archiveClassifier = null
+    archiveVersion = '' 
+
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+
+    // 1. Включаем ресурсы (mod.hjson)
+    from sourceSets.main.resources
+    
+    // 2. Включаем ресурсы из наших зависимостей (например, LICENSE файлы), но не их классы
+    from(configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it).matching{
+        exclude '**/*.class'
+    }})
+
+    // 3. Добавляем в корень архива созданный classes.dex
+    from(new File(buildDir, "dex")) {
+        into '/'
+    }
+
     doLast {
-        def androidJarFile = tasks.jarAndroid.archiveFile.get().asFile
-        def finalJarFile = new File(androidJarFile.getParent(), "PictureToLogic.jar")
-        delete(tasks.jar.archiveFile.get().asFile)
-        if (finalJarFile.exists()) {
-            delete(finalJarFile)
-        }
-        if (!androidJarFile.renameTo(finalJarFile)) {
-            throw new GradleException("Could not rename ${androidJarFile} to ${finalJarFile}")
-        }
+        println "Successfully built universal JAR at: ${archiveFile.get().asFile.path}"
     }
 }
 
+// Вспомогательная функция для поиска последней версии build-tools
 String findLatestBuildTools(){
     def buildTools = new File(System.getenv("ANDROID_HOME"), "build-tools")
     if(!buildTools.exists()) return ""
