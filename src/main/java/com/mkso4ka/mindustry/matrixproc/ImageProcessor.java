@@ -3,7 +3,7 @@ package com.mkso4ka.mindustry.matrixproc;
 import arc.graphics.Color;
 import arc.graphics.Pixmap;
 import org.waveware.delaunator.Delaunator;
-import org.waveware.delaunator.Point;
+import org.waveware.delaunator.DPoint;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -42,7 +42,7 @@ public class ImageProcessor {
         int maxPoints = (int)(5000 - tolerance * 1500);
 
         float[][] edgeMap = sobelEdgeDetect(originalPixmap);
-        List<Point> points = placePoints(edgeMap, maxPoints);
+        List<DPoint> points = placePoints(edgeMap, maxPoints);
         Delaunator delaunator = new Delaunator(points);
         Map<Integer, List<Triangle>> trianglesByColor = colorTriangles(delaunator, points);
         
@@ -86,40 +86,40 @@ public class ImageProcessor {
         return edgeMap;
     }
 
-    private List<Point> placePoints(float[][] edgeMap, int maxPoints) {
-        List<Point> points = new ArrayList<>();
+    private List<DPoint> placePoints(float[][] edgeMap, int maxPoints) {
+        List<DPoint> points = new ArrayList<>();
         Random random = new Random(0);
 
-        points.add(new Point(0, 0));
-        points.add(new Point(width - 1, 0));
-        points.add(new Point(0, height - 1));
-        points.add(new Point(width - 1, height - 1));
-        points.add(new Point(width / 2, 0));
-        points.add(new Point(width / 2, height - 1));
-        points.add(new Point(0, height / 2));
-        points.add(new Point(width - 1, height / 2));
+        points.add(new DPoint(0, 0));
+        points.add(new DPoint(width - 1, 0));
+        points.add(new DPoint(0, height - 1));
+        points.add(new DPoint(width - 1, height - 1));
+        points.add(new DPoint(width / 2, 0));
+        points.add(new DPoint(width / 2, height - 1));
+        points.add(new DPoint(0, height / 2));
+        points.add(new DPoint(width - 1, height / 2));
 
         for (int i = 0; i < maxPoints * 10 && points.size() < maxPoints; i++) {
             int x = random.nextInt(width);
             int y = random.nextInt(height);
             if (random.nextFloat() < edgeMap[x][y]) {
-                points.add(new Point(x, y));
+                points.add(new DPoint(x, y));
             }
         }
         while (points.size() < maxPoints) {
-            points.add(new Point(random.nextInt(width), random.nextInt(height)));
+            points.add(new DPoint(random.nextInt(width), random.nextInt(height)));
         }
         return points;
     }
 
-    private Map<Integer, List<Triangle>> colorTriangles(Delaunator delaunator, List<Point> points) {
+    private Map<Integer, List<Triangle>> colorTriangles(Delaunator delaunator, List<DPoint> points) {
         Map<Integer, List<Triangle>> trianglesByColor = new HashMap<>();
         int[] triangles = delaunator.triangles;
 
         for (int i = 0; i < triangles.length; i += 3) {
-            Point p1 = points.get(triangles[i]);
-            Point p2 = points.get(triangles[i + 1]);
-            Point p3 = points.get(triangles[i + 2]);
+            DPoint p1 = points.get(triangles[i]);
+            DPoint p2 = points.get(triangles[i + 1]);
+            DPoint p3 = points.get(triangles[i + 2]);
 
             int centerX = (int)(p1.x + p2.x + p3.x) / 3;
             int centerY = (int)(p1.y + p2.y + p3.y) / 3;
