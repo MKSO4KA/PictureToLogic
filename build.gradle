@@ -51,41 +51,31 @@ jar {
     }
 }
 
-// Задача для создания classes.dex
 task createDex(type: Exec) {
     dependsOn 'jar'
     def d8 = new File(System.getenv("ANDROID_HOME"), "build-tools/${findLatestBuildTools()}/d8" + (isWindows ? ".bat" : ""))
-    
-    // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
-    // Указываем d8 на директорию для вывода, а не на сам файл.
     def dexOutputDir = new File(buildDir, "dex")
     
     doFirst {
-        // Убеждаемся, что эта директория существует перед запуском d8
         dexOutputDir.mkdirs()
     }
 
-    // Передаем d8 директорию в качестве параметра --output
     commandLine d8, "--release", "--output", dexOutputDir, tasks.jar.archiveFile.get().asFile
 }
 
-// Задача для сборки финального JAR
 task deploy(type: Jar, dependsOn: createDex) {
     archiveBaseName = "PictureToLogic"
     archiveClassifier = null
     archiveVersion = '' 
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
 
-    // 1. Включаем ресурсы (mod.hjson)
+    // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+    // Используем EXCLUDE, чтобы предотвратить попадание дубликатов в архив.
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
     from sourceSets.main.resources
-    
-    // 2. Включаем ресурсы из зависимостей, но не их классы
     from(configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it).matching{
         exclude '**/*.class'
     }})
-
-    // 3. Добавляем в корень архива созданный classes.dex
-    // Этот код остался без изменений, так как он правильно берет все из папки /build/dex/
     from(new File(buildDir, "dex")) {
         into '/'
     }
@@ -95,14 +85,12 @@ task deploy(type: Jar, dependsOn: createDex) {
     }
 }
 
-// Вспомогательная функция для поиска последней версии build-tools
 String findLatestBuildTools(){
     def buildTools = new File(System.getenv("ANDROID_HOME"), "build-tools")
     if(!buildTools.exists()) return ""
-    // В CI окружении может быть много версий, находим самую свежую стабильную.
     return buildTools.listFiles()
             .collect { it.name }
             .sort()
             .reverse()
-            .find { !it.contains("rc") } // Игнорируем release candidates
+            .find { !it.contains("rc") }
 }
