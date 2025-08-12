@@ -49,20 +49,17 @@ processResources {
 jar {
     archiveBaseName = project.name + "-Desktop"
 
-    // Эта строка добавляет в JAR скомпилированные классы вашего мода и ресурсы (включая mod.hjson)
-    from(sourceSets.main.output) {
-        // Исключаем дубликаты лицензий и прочего мусора из зависимостей
-        exclude "META-INF/LICENSE"
-        exclude "META-INF/NOTICE"
-        exclude "META-INF/maven/**"
-    }
+    // Добавляем стратегию обработки дубликатов. EXCLUDE - просто пропускать дубликаты.
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
-    // Этот блок, как и раньше, добавляет зависимости
+    // Добавляем скомпилированные классы и ресурсы вашего мода
+    from sourceSets.main.output
+
+    // Добавляем содержимое ТОЛЬКО JAR-файлов из зависимостей
     from {
-        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+        configurations.runtimeClasspath.findAll { it.name.endsWith('.jar') }.collect { zipTree(it) }
     }
 }
-
 task jarAndroid (type: Jar, dependsOn: jar){
     archiveBaseName = project.name + "-Android"
     from(zipTree(jar.archiveFile))
