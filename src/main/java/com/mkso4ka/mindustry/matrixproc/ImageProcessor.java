@@ -6,6 +6,8 @@ import org.waveware.delaunator.Delaunator;
 import org.waveware.delaunator.DPoint;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +18,7 @@ public class ImageProcessor {
     private int width;
     private int height;
 
+    // --- Вспомогательные классы ---
     public static class ProcessingSteps {
         public final Map<Integer, List<Triangle>> result;
         public ProcessingSteps(Map<Integer, List<Triangle>> result) {
@@ -32,33 +35,32 @@ public class ImageProcessor {
         }
     }
 
+    // --- Конструктор ---
     public ImageProcessor(Pixmap pixmap) {
         this.originalPixmap = pixmap;
         this.width = pixmap.getWidth();
         this.height = pixmap.getHeight();
     }
     
+    // --- Главный метод обработки ---
     public ProcessingSteps process(double tolerance, int diffusionIterations, float diffusionContrast, int displayId) {
         int maxPoints = (int)(5000 - tolerance * 1500);
 
-        // ЭТАП 1: Обнаружение краев (Sobel)
         float[][] edgeMap = sobelEdgeDetect(originalPixmap);
         logEdgeMap(edgeMap, displayId);
 
-        // ЭТАП 2: Расстановка точек
         List<DPoint> points = placePoints(edgeMap, maxPoints);
         logPlacedPoints(points, displayId);
 
-        // ЭТАП 3: Триангуляция и раскраска
         Delaunator delaunator = new Delaunator(points);
         Map<Integer, List<Triangle>> trianglesByColor = colorTriangles(delaunator, points);
         logFinalTriangulation(trianglesByColor, displayId);
         
         WebLogger.info("Triangulation for display #%d complete. Generated %d triangles.", displayId, delaunator.triangles.length / 3);
-
         return new ProcessingSteps(trianglesByColor);
     }
 
+    // --- Методы логирования промежуточных этапов ---
     private void logEdgeMap(float[][] edgeMap, int displayId) {
         Pixmap edgePixmap = new Pixmap(width, height);
         for (int y = 0; y < height; y++) {
@@ -73,35 +75,99 @@ public class ImageProcessor {
 
     private void logPlacedPoints(List<DPoint> points, int displayId) {
         Pixmap pointsPixmap = originalPixmap.copy();
-        
-        // ИСПРАВЛЕНИЕ: Устанавливаем цвет как int и рисуем маленький квадрат вместо круга
-        pointsPixmap.setColor(Color.green.rgba());
+        int greenColor = Color.green.rgba();
         for (DPoint p : points) {
-            pointsPixmap.fillRectangle((int) p.x, (int) p.y, 2, 2);
+            // Рисуем квадрат 2x2 вместо точки для лучшей видимости
+            fillRectangleManually(pointsPixmap, (int) p.x, (int) p.y, 2, 2, greenColor);
         }
-        
         WebLogger.logImage(String.format("slice_%d_2_PlacedPoints", displayId), pointsPixmap);
         pointsPixmap.dispose();
     }
     
     private void logFinalTriangulation(Map<Integer, List<Triangle>> trianglesByColor, int displayId) {
         Pixmap finalTrianglesPixmap = new Pixmap(width, height);
-        
-        // ИСПРАВЛЕНИЕ: Используем 'none' в нижнем регистре
-        finalTrianglesPixmap.setBlending(Pixmap.Blending.none);
+        // Устанавливаем режим смешивания в 0 (соответствует Blending.none)
+        finalTrianglesPixmap.setBlending(0); 
         
         for (Map.Entry<Integer, List<Triangle>> entry : trianglesByColor.entrySet()) {
-            // ИСПРАВЛЕНИЕ: Установка цвета как int (что entry.getKey() и делает)
-            finalTrianglesPixmap.setColor(entry.getKey());
-            
+            int color = entry.getKey();
             for (Triangle t : entry.getValue()) {
-                // ИСПРАВЛЕНИЕ: Этот вызов теперь корректен, т.к. цвет установлен правильно
-                finalTrianglesPixmap.fillTriangle(t.x1, t.y1, t.x2, t.y2, t.x3, t.y3);
+                fillTriangleManually(finalTrianglesPixmap, t.x1, t.y1, t.x2, t.y2, t.x3, t.y3, color);
             }
         }
         WebLogger.logImage(String.format("slice_%d_3_FinalTriangulation", displayId), finalTrianglesPixmap);
         finalTrianglesPixmap.dispose();
     }
+
+    // --- Ручные реализации методов рисования (для совместимости) ---
+
+    private void fillRectangleManually(Pixmap pixmap, int x, int y, int w, int h, int color) {
+        for (int j = y; j < y + h; j++) {
+            for (int i = x; i < x + w; i++) {
+                if (i >= 0 && i < pixmap.getWidth() && j >= 0 && j < pixmap.getHeight()) {
+                    pixmap.set(i, j, color);
+                }
+            }
+        }
+    }
+
+    private void fillTriangleManually(Pixmap pixmap, int x1, int y1, int x2, int y2, int x3, int y3, int color) {
+        // Сортируем вершины по Y-координате (v1 - самая верхняя)
+        int[][] vertices = {{x1, y1}, {x2, y2}, {x3, y3}};
+        Arrays.sort(vertices, Comparator.comparingInt(v -> v[1]));
+        int[] v1 = vertices[0], v2 = vertices[1], v3 = vertices[2];
+
+        // Частный случай: горизонтальная нижняя сторона
+        if (v2[1] == v3[1]) {
+            fillFlatBottomTriangle(pixmap, v1, v2, v3, color);
+        } 
+        // Частный случай: горизонтальная верхняя сторона
+        else if (v1[1] == v2[1]) {
+            fillFlatTopTriangle(pixmap, v1, v2, v3, color);
+        } 
+        // Общий случай: разбиваем на 2 треугольника
+        else {
+            int[] v4 = {(int)(v1[0] + ((float)(v2[1] - v1[1]) / (float)(v3[1] - v1[1])) * (v3[0] - v1[0])), v2[1]};
+            fillFlatBottomTriangle(pixmap, v1, v2, v4, color);
+            fillFlatTopTriangle(pixmap, v2, v4, v3, color);
+        }
+    }
+
+    private void fillFlatBottomTriangle(Pixmap pixmap, int[] v1, int[] v2, int[] v3, int color) {
+        float invSlope1 = (float)(v2[0] - v1[0]) / (v2[1] - v1[1]);
+        float invSlope2 = (float)(v3[0] - v1[0]) / (v3[1] - v1[1]);
+        float curX1 = v1[0];
+        float curX2 = v1[0];
+        for (int scanlineY = v1[1]; scanlineY <= v2[1]; scanlineY++) {
+            drawHorizontalLine(pixmap, (int)curX1, (int)curX2, scanlineY, color);
+            curX1 += invSlope1;
+            curX2 += invSlope2;
+        }
+    }
+
+    private void fillFlatTopTriangle(Pixmap pixmap, int[] v1, int[] v2, int[] v3, int color) {
+        float invSlope1 = (float)(v3[0] - v1[0]) / (v3[1] - v1[1]);
+        float invSlope2 = (float)(v3[0] - v2[0]) / (v3[1] - v2[1]);
+        float curX1 = v3[0];
+        float curX2 = v3[0];
+        for (int scanlineY = v3[1]; scanlineY > v1[1]; scanlineY--) {
+            drawHorizontalLine(pixmap, (int)curX1, (int)curX2, scanlineY, color);
+            curX1 -= invSlope1;
+            curX2 -= invSlope2;
+        }
+    }
+
+    private void drawHorizontalLine(Pixmap pixmap, int x1, int x2, int y, int color) {
+        int startX = Math.min(x1, x2);
+        int endX = Math.max(x1, x2);
+        for (int x = startX; x <= endX; x++) {
+            if (x >= 0 && x < pixmap.getWidth() && y >= 0 && y < pixmap.getHeight()) {
+                pixmap.set(x, y, color);
+            }
+        }
+    }
+
+    // --- Алгоритмы обработки изображения (без изменений) ---
 
     private float[][] sobelEdgeDetect(Pixmap source) {
         float[][] gray = new float[width][height];
