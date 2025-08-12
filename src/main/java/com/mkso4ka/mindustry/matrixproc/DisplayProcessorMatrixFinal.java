@@ -133,4 +133,50 @@ class DisplayProcessorMatrixFinal {
         
         return dx * dx + dy * dy;
     }
+    // Поместите этот код в конец класса DisplayProcessorMatrixFinal
+    
+    /**
+     * Статический метод для предварительного расчета максимального количества процессоров,
+     * которые можно разместить на схеме с заданной конфигурацией.
+     * @param n Количество дисплеев по горизонтали (X)
+     * @param m Количество дисплеев по вертикали (Y)
+     * @param displaySize Размер дисплея в тайлах (3 или 6)
+     * @return Максимальное количество доступных слотов для процессоров.
+     */
+    public static int calculateMaxAvailableProcessors(int n, int m, int displaySize) {
+        // Используем существующую логику для создания "чертежа" матрицы
+        DisplayMatrix displayMatrix = new DisplayMatrix();
+        MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(n, m, displaySize, PROCESSOR_REACH);
+    
+        // Создаем матрицу, как это делается в конструкторе
+        Cell[][] matrix = new Cell[blueprint.height][blueprint.width];
+        for (int i = 0; i < blueprint.height; i++) {
+            for (int j = 0; j < blueprint.width; j++) {
+                matrix[i][j] = new Cell();
+            }
+        }
+    
+        for (int i = 0; i < blueprint.displayBottomLefts.length; i++) {
+            Point p = blueprint.displayBottomLefts[i];
+            for (int row = p.y; row < p.y + displaySize; row++) {
+                for (int col = p.x; col < p.x + displaySize; col++) {
+                    if (row < blueprint.height && col < blueprint.width) {
+                        matrix[row][col].type = 2; // Помечаем как дисплей
+                        matrix[row][col].ownerId = i;
+                    }
+                }
+            }
+        }
+    
+        // Теперь просто считаем все пустые ячейки (type == 0)
+        int availableSlots = 0;
+        for (int i = 0; i < blueprint.height; i++) {
+            for (int j = 0; j < blueprint.width; j++) {
+                if (matrix[i][j].type == 0) {
+                    availableSlots++;
+                }
+            }
+        }
+        return availableSlots;
+    }
 }

@@ -1,10 +1,7 @@
 package com.mkso4ka.mindustry.matrixproc;
 
 import arc.files.Fi;
-import arc.graphics.Color;
 import arc.graphics.Pixmap;
-import arc.struct.Seq;
-import arc.struct.StringMap;
 import mindustry.content.Blocks;
 import mindustry.game.Schematic;
 import mindustry.game.Schematic.Stile;
@@ -13,25 +10,40 @@ import mindustry.world.Tile;
 import mindustry.world.blocks.logic.LogicBlock;
 import mindustry.world.blocks.logic.LogicBlock.LogicLink;
 import mindustry.world.blocks.logic.LogicDisplay;
+
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 public class LogicCore {
 
     private static final int BORDER_SIZE = 8;
 
-    public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, double detail, int maxInstructions, boolean useTransparentBg) {
+    // Внутренний класс для хранения результата обработки одного слайса
+    private static class SliceProcessingResult {
+        final int displayIndex;
+        final List<String> processorCodes;
+        SliceProcessingResult(int displayIndex, List<String> codes) {
+            this.displayIndex = displayIndex;
+            this.processorCodes = codes;
+        }
+    }
+
+    public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, double detail, int maxInstructions, boolean useTransparentBg, final AtomicBoolean cancellationToken) {
+        
+        // Создаем пул потоков, равный количеству доступных ядер процессора
+        ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+        
         try {
             WebLogger.clearDebugImages();
             WebLogger.clearProcessorCodeLogs();
 
             Pixmap masterPixmap = new Pixmap(imageFile);
-
             int displaySize = displayBlock.size;
             int displayPixelSize = getDisplayPixelSize(displaySize);
-            
             int totalDisplayWidth = displaysX * displayPixelSize;
             int totalDisplayHeight = displaysY * displayPixelSize;
 
@@ -42,121 +54,130 @@ public class LogicCore {
             DisplayMatrix displayMatrix = new DisplayMatrix();
             MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, DisplayProcessorMatrixFinal.PROCESSOR_REACH);
 
-            int[] processorsPerDisplay = new int[blueprint.displayBottomLefts.length];
-            Map<Integer, List<String>> codeMap = new HashMap<>();
-            
-            List<DisplayCodeInfo> finalCodesForApi = new ArrayList<>();
+            List<Future<SliceProcessingResult>> futures = new ArrayList<>();
 
             for (int i = 0; i < displaysY; i++) {
                 for (int j = 0; j < displaysX; j++) {
-                    int displayIndex = j * displaysY + i;
-                    
-                    int displayStartX = j * displayPixelSize;
-                    int displayStartY = i * displayPixelSize;
-
-                    int sliceStartX = Math.max(0, displayStartX - BORDER_SIZE);
-                    int sliceStartY = Math.max(0, displayStartY - BORDER_SIZE);
-                    int sliceEndX = Math.min(totalDisplayWidth, displayStartX + displayPixelSize + BORDER_SIZE);
-                    int sliceEndY = Math.min(totalDisplayHeight, displayStartY + displayPixelSize + BORDER_SIZE);
-
-                    int sliceWidth = sliceEndX - sliceStartX;
-                    int sliceHeight = sliceEndY - sliceStartY;
-
-                    Pixmap finalSlice = new Pixmap(sliceWidth, sliceHeight);
-                    finalSlice.draw(scaledMasterPixmap, sliceStartX, sliceStartY, sliceWidth, sliceHeight, 0, 0, sliceWidth, sliceHeight);
-                    
-                    if (useTransparentBg) {
-                        int bgColor = finalSlice.get(0, 0);
-                        for (int y = 0; y < finalSlice.getHeight(); y++) {
-                            for (int x = 0; x < finalSlice.getWidth(); x++) {
-                                if (finalSlice.get(x, y) == bgColor) {
-                                    finalSlice.set(x, y, 0);
-                                }
-                            }
-                        }
+                    if (cancellationToken.get()) { // Проверяем отмену перед запуском новой задачи
+                        WebLogger.warn("Processing cancelled by user before starting all tasks.");
+                        return null;
                     }
 
-                    ImageProcessor processor = new ImageProcessor(finalSlice);
-                    ImageProcessor.ProcessingSteps steps = processor.process(detail, displayIndex);
-                    
-                    List<String> allCommands = generateTriangleCommandList(
-                        steps.result, 
-                        displayPixelSize, 
-                        sliceStartX, 
-                        sliceStartY, 
-                        displayStartX, 
-                        displayStartY
-                    );
-                    
-                    StringBuilder fullCodeBuilder = new StringBuilder();
-                    allCommands.forEach(cmd -> fullCodeBuilder.append(cmd).append("\n"));
-                    finalCodesForApi.add(new DisplayCodeInfo(displayIndex, fullCodeBuilder.toString(), displayPixelSize));
+                    final int displayIndex = j * displaysY + i;
+                    final int currentI = i;
+                    final int currentJ = j;
 
-                    int safeMaxInstructions = maxInstructions - 1;
-                    if (safeMaxInstructions < 1) safeMaxInstructions = 1;
+                    // Создаем задачу для обработки одного слайса
+                    Callable<SliceProcessingResult> task = () -> {
+                        int displayStartX = currentJ * displayPixelSize;
+                        int displayStartY = currentI * displayPixelSize;
+                        int sliceStartX = Math.max(0, displayStartX - BORDER_SIZE);
+                        int sliceStartY = Math.max(0, displayStartY - BORDER_SIZE);
+                        int sliceEndX = Math.min(totalDisplayWidth, displayStartX + displayPixelSize + BORDER_SIZE);
+                        int sliceEndY = Math.min(totalDisplayHeight, displayStartY + displayPixelSize + BORDER_SIZE);
+                        int sliceWidth = sliceEndX - sliceStartX;
+                        int sliceHeight = sliceEndY - sliceStartY;
 
-                    List<String> finalProcessorCodes = new ArrayList<>();
-                    if (!allCommands.isEmpty()) {
-                        List<String> currentChunk = new ArrayList<>();
-                        String lastSeenColor = ""; 
+                        Pixmap finalSlice = new Pixmap(sliceWidth, sliceHeight);
+                        // Синхронизируем доступ к общему ресурсу (scaledMasterPixmap)
+                        synchronized (scaledMasterPixmap) {
+                            finalSlice.draw(scaledMasterPixmap, sliceStartX, sliceStartY, sliceWidth, sliceHeight, 0, 0, sliceWidth, sliceHeight);
+                        }
 
-                        for (String command : allCommands) {
-                            if (currentChunk.isEmpty()) {
-                                if (!command.startsWith("draw color")) {
-                                    if (!lastSeenColor.isEmpty()) {
-                                        currentChunk.add(lastSeenColor);
-                                    }
+                        if (useTransparentBg) {
+                            int bgColor = finalSlice.get(0, 0);
+                            for (int y = 0; y < finalSlice.getHeight(); y++) {
+                                for (int x = 0; x < finalSlice.getWidth(); x++) {
+                                    if (finalSlice.get(x, y) == bgColor) finalSlice.set(x, y, 0);
                                 }
-                            }
-
-                            currentChunk.add(command);
-
-                            if (command.startsWith("draw color")) {
-                                lastSeenColor = command;
-                            }
-
-                            if (currentChunk.size() >= safeMaxInstructions) {
-                                if (currentChunk.get(currentChunk.size() - 1).startsWith("draw color")) {
-                                    currentChunk.remove(currentChunk.size() - 1);
-                                }
-
-                                currentChunk.add("drawflush display1");
-                                finalProcessorCodes.add(String.join("\n", currentChunk));
-                                currentChunk.clear();
                             }
                         }
 
-                        if (!currentChunk.isEmpty()) {
-                            currentChunk.add("drawflush display1");
-                            finalProcessorCodes.add(String.join("\n", currentChunk));
-                        }
-                    }
-                    
-                    codeMap.put(displayIndex, finalProcessorCodes);
-                    processorsPerDisplay[displayIndex] = finalProcessorCodes.size();
+                        ImageProcessor imageProc = new ImageProcessor(finalSlice);
+                        ImageProcessor.ProcessingSteps steps = imageProc.process(detail, displayIndex);
+                        finalSlice.dispose();
 
-                    finalSlice.dispose();
+                        List<String> allCommands = generateTriangleCommandList(steps.result, displayPixelSize, sliceStartX, sliceStartY, displayStartX, displayStartY);
+                        List<String> finalProcessorCodes = splitCommandsIntoChunks(allCommands, maxInstructions);
+                        
+                        return new SliceProcessingResult(displayIndex, finalProcessorCodes);
+                    };
+                    futures.add(executor.submit(task));
                 }
             }
+
+            // Собираем результаты
+            Map<Integer, List<String>> codeMap = new ConcurrentHashMap<>();
+            int[] processorsPerDisplay = new int[blueprint.displayBottomLefts.length];
+
+            for (Future<SliceProcessingResult> future : futures) {
+                if (cancellationToken.get()) { // Проверяем отмену во время ожидания результатов
+                    WebLogger.warn("Processing cancelled by user while collecting results.");
+                    futures.forEach(f -> f.cancel(true)); // Отменяем все оставшиеся задачи
+                    return null;
+                }
+                SliceProcessingResult result = future.get(); // Блокирует до завершения задачи
+                codeMap.put(result.displayIndex, result.processorCodes);
+                processorsPerDisplay[result.displayIndex] = result.processorCodes.size();
+            }
+            
             scaledMasterPixmap.dispose();
 
-            WebLogger.logDisplayCodes(finalCodesForApi);
-
-            DisplayProcessorMatrixFinal matrixFinal = new DisplayProcessorMatrixFinal(
-                blueprint.n, blueprint.m, processorsPerDisplay, blueprint.displayBottomLefts, displaySize
-            );
+            DisplayProcessorMatrixFinal matrixFinal = new DisplayProcessorMatrixFinal(blueprint.n, blueprint.m, processorsPerDisplay, blueprint.displayBottomLefts, displaySize);
             matrixFinal.placeProcessors();
             
             Schematic schematic = buildSchematic(matrixFinal.getMatrix(), matrixFinal.getDisplays(), codeMap, displayBlock);
-
             return new ProcessingResult(schematic, matrixFinal.getMatrix(), matrixFinal.getDisplays(), displaySize);
 
         } catch (Exception e) {
-            WebLogger.err("Критическая ошибка в LogicCore!", e);
+            if (e instanceof InterruptedException || e instanceof CancellationException) {
+                WebLogger.warn("Processing thread was interrupted or cancelled.");
+            } else {
+                WebLogger.err("Критическая ошибка в LogicCore!", e);
+            }
             return null;
+        } finally {
+            executor.shutdownNow(); // Всегда выключаем пул потоков
         }
     }
+    
+    private List<String> splitCommandsIntoChunks(List<String> allCommands, int maxInstructions) {
+        int safeMaxInstructions = maxInstructions - 1;
+        if (safeMaxInstructions < 1) safeMaxInstructions = 1;
 
+        List<String> finalProcessorCodes = new ArrayList<>();
+        if (!allCommands.isEmpty()) {
+            List<String> currentChunk = new ArrayList<>();
+            String lastSeenColor = ""; 
+
+            for (String command : allCommands) {
+                if (currentChunk.isEmpty()) {
+                    if (!command.startsWith("draw color") && !lastSeenColor.isEmpty()) {
+                        currentChunk.add(lastSeenColor);
+                    }
+                }
+                currentChunk.add(command);
+                if (command.startsWith("draw color")) lastSeenColor = command;
+
+                if (currentChunk.size() >= safeMaxInstructions) {
+                    if (currentChunk.get(currentChunk.size() - 1).startsWith("draw color")) {
+                        currentChunk.remove(currentChunk.size() - 1);
+                    }
+                    currentChunk.add("drawflush display1");
+                    finalProcessorCodes.add(String.join("\n", currentChunk));
+                    currentChunk.clear();
+                }
+            }
+            if (!currentChunk.isEmpty()) {
+                currentChunk.add("drawflush display1");
+                finalProcessorCodes.add(String.join("\n", currentChunk));
+            }
+        }
+        return finalProcessorCodes;
+    }
+
+    // Методы buildSchematic, generateTriangleCommandList, getDisplayPixelSize, formatColorCommand остаются без изменений
+    // ... (вставьте сюда остальные методы из вашего LogicCore.java)
     private Schematic buildSchematic(DisplayProcessorMatrixFinal.Cell[][] matrix, DisplayInfo[] displays, Map<Integer, List<String>> codeMap, Block displayBlock) {
         Seq<Stile> tiles = new Seq<>();
         int height = matrix.length;
@@ -183,7 +204,6 @@ public class LogicCore {
                     LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
                     build.tile = new Tile(schemX, schemY);
 
-                    // --- ИЗМЕНЕНИЕ: Подключаемся к ближайшей точке дисплея ---
                     int displayMinX = ownerDisplay.bottomLeft.x;
                     int displayMinY = ownerDisplay.bottomLeft.y;
                     int displayMaxX = ownerDisplay.bottomLeft.x + displayBlock.size - 1;
@@ -209,19 +229,10 @@ public class LogicCore {
         
         WebLogger.info("[Schematic Stats] Total objects placed: %d (%d displays, %d processors)", displays.length + processorCount, displays.length, processorCount);
 
-        StringMap tags = new StringMap();
-        tags.put("name", "PictureToLogic-Schematic");
-        return new Schematic(tiles, tags, width, height);
+        return new Schematic(new Seq<>(tiles.toArray(Stile.class)), arc.struct.StringMap.of("name", "PictureToLogic-Schematic"), width, height);
     }
 
-    private List<String> generateTriangleCommandList(
-        Map<Integer, List<ImageProcessor.Triangle>> triangles, 
-        int displayPixelSize, 
-        int sliceStartX, 
-        int sliceStartY, 
-        int displayStartX, 
-        int displayStartY
-    ) {
+    private List<String> generateTriangleCommandList(Map<Integer, List<ImageProcessor.Triangle>> triangles, int displayPixelSize, int sliceStartX, int sliceStartY, int displayStartX, int displayStartY) {
         List<String> commands = new ArrayList<>();
         int maxCoord = displayPixelSize - 1;
 
