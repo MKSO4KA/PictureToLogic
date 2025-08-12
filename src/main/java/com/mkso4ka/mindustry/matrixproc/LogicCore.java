@@ -92,8 +92,6 @@ public class LogicCore {
                     allCommands.forEach(cmd -> fullCodeBuilder.append(cmd).append("\n"));
                     finalCodesForApi.add(new DisplayCodeInfo(displayIndex, fullCodeBuilder.toString(), displayPixelSize));
 
-                    // --- НАЧАЛО ИСПРАВЛЕННОГО БЛОКА ---
-
                     int safeMaxInstructions = maxInstructions - 1;
                     if (safeMaxInstructions < 1) safeMaxInstructions = 1;
 
@@ -133,8 +131,6 @@ public class LogicCore {
                             finalProcessorCodes.add(String.join("\n", currentChunk));
                         }
                     }
-                    
-                    // --- КОНЕЦ ИСПРАВЛЕННОГО БЛОКА ---
                     
                     codeMap.put(displayIndex, finalProcessorCodes);
                     processorsPerDisplay[displayIndex] = finalProcessorCodes.size();
@@ -186,9 +182,16 @@ public class LogicCore {
 
                     LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
                     build.tile = new Tile(schemX, schemY);
-                    int linkToX = ownerDisplay.bottomLeft.x + displayBlock.size / 2;
-                    int linkToY = ownerDisplay.bottomLeft.y + displayBlock.size / 2;
+
+                    // --- ИЗМЕНЕНИЕ: Подключаемся к ближайшей точке дисплея ---
+                    int displayMinX = ownerDisplay.bottomLeft.x;
+                    int displayMinY = ownerDisplay.bottomLeft.y;
+                    int displayMaxX = ownerDisplay.bottomLeft.x + displayBlock.size - 1;
+                    int displayMaxY = ownerDisplay.bottomLeft.y + displayBlock.size - 1;
+                    int linkToX = Math.max(displayMinX, Math.min(schemX, displayMaxX));
+                    int linkToY = Math.max(displayMinY, Math.min(schemY, displayMaxY));
                     build.links.add(new LogicLink(linkToX, linkToY, "display1", true));
+                    
                     build.updateCode(code);
                     tiles.add(new Stile(Blocks.microProcessor, schemX, schemY, build.config(), (byte) 0));
                     processorCount++;
