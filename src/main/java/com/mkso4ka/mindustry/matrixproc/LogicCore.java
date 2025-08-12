@@ -79,47 +79,37 @@ public class LogicCore {
                     allCommands.forEach(cmd -> fullCodeBuilder.append(cmd).append("\n"));
                     finalCodesForApi.add(new DisplayCodeInfo(displayIndex, fullCodeBuilder.toString(), displayPixelSize));
 
-                    int safeMaxInstructions = maxInstructions - 2;
+                    // --- НАЧАЛО ИСПРАВЛЕННОГО БЛОКА ---
+
+                    // Резервируем одну строку для команды drawflush
+                    int safeMaxInstructions = maxInstructions - 1;
                     if (safeMaxInstructions < 1) safeMaxInstructions = 1;
 
                     List<String> finalProcessorCodes = new ArrayList<>();
                     if (!allCommands.isEmpty()) {
-                        List<String> currentContent = new ArrayList<>();
-                        String activeColor = "";
+                        List<String> currentChunkContent = new ArrayList<>();
 
                         for (String command : allCommands) {
-                            if (command.startsWith("draw color")) {
-                                activeColor = command;
-                                break;
+                            // Если добавление новой команды превысит лимит,
+                            // завершаем текущий кусок кода и начинаем новый.
+                            if (currentChunkContent.size() >= safeMaxInstructions) {
+                                currentChunkContent.add("drawflush display1");
+                                finalProcessorCodes.add(String.join("\n", currentChunkContent));
+                                currentChunkContent.clear();
                             }
-                        }
-                        if (activeColor.isEmpty()) {
-                            activeColor = "draw color 0 0 0 255 0 0";
+                            
+                            // Просто добавляем команду в текущий кусок.
+                            currentChunkContent.add(command);
                         }
 
-                        for (String command : allCommands) {
-                            if (command.startsWith("draw color")) {
-                                if (!currentContent.isEmpty()) {
-                                    String chunk = activeColor + "\n" + String.join("\n", currentContent) + "\ndrawflush display1";
-                                    finalProcessorCodes.add(chunk);
-                                    currentContent.clear();
-                                }
-                                activeColor = command;
-                            } else {
-                                currentContent.add(command);
-                                if (currentContent.size() >= safeMaxInstructions) {
-                                    String chunk = activeColor + "\n" + String.join("\n", currentContent) + "\ndrawflush display1";
-                                    finalProcessorCodes.add(chunk);
-                                    currentContent.clear();
-                                }
-                            }
-                        }
-
-                        if (!currentContent.isEmpty()) {
-                            String chunk = activeColor + "\n" + String.join("\n", currentContent) + "\ndrawflush display1";
-                            finalProcessorCodes.add(chunk);
+                        // После цикла не забываем сохранить последний оставшийся кусок кода.
+                        if (!currentChunkContent.isEmpty()) {
+                            currentChunkContent.add("drawflush display1");
+                            finalProcessorCodes.add(String.join("\n", currentChunkContent));
                         }
                     }
+
+                    // --- КОНЕЦ ИСПРАВЛЕННОГО БЛОКА ---
                     
                     codeMap.put(displayIndex, finalProcessorCodes);
                     processorsPerDisplay[displayIndex] = finalProcessorCodes.size();

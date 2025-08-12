@@ -196,11 +196,11 @@ public class ImageProcessor {
             edgeMap[x][y] /= maxGradient;
         }}} return edgeMap;
     }
-    // Поместите этот код в класс ImageProcessor.java, заменив существующий метод placePoints
+
     private List<DPoint> placePoints(float[][] edgeMap, int maxPoints) {
         List<DPoint> points = new ArrayList<>();
         Random random = new Random(0); // Используем фиксированный seed для повторяемости
-    
+
         // 1. Добавляем обязательные точки по краям и в центре, чтобы гарантировать охват всего изображения
         points.add(new DPoint(0, 0));
         points.add(new DPoint(width - 1, 0));
@@ -210,7 +210,7 @@ public class ImageProcessor {
         points.add(new DPoint(width / 2, height - 1));
         points.add(new DPoint(0, height / 2));
         points.add(new DPoint(width - 1, height / 2));
-    
+
         // 2. Собираем все точки-кандидаты, которые лежат на границах
         List<DPoint> edgeCandidates = new ArrayList<>();
         // Порог можно настроить. 0.1 - хорошее начало.
@@ -224,22 +224,23 @@ public class ImageProcessor {
             }
         }
         WebLogger.info("Найдено %d точек-кандидатов на границах (порог > %.2f)", edgeCandidates.size(), threshold);
-    
+
         // 3. Перемешиваем кандидатов и добавляем нужное количество в итоговый список
         java.util.Collections.shuffle(edgeCandidates, random);
         int pointsToAdd = Math.min(maxPoints - points.size(), edgeCandidates.size());
         if (pointsToAdd > 0) {
             points.addAll(edgeCandidates.subList(0, pointsToAdd));
         }
-    
+
         // 4. Если точек все еще не хватает (например, на почти пустом изображении), 
         // добиваем случайными, как и раньше.
         while (points.size() < maxPoints) {
             points.add(new DPoint(random.nextInt(width), random.nextInt(height)));
         }
-    
+
         return points;
     }
+
     private Map<Integer, List<Triangle>> colorTriangles(Delaunator delaunator, List<DPoint> points) {
         Map<Integer, List<Triangle>> trianglesByColor = new HashMap<>(); int[] triangles = delaunator.triangles;
         for (int i = 0; i < triangles.length; i += 3) {
