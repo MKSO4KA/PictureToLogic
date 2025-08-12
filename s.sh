@@ -1,3 +1,222 @@
+# ==============================================================================
+# === Скрипт для обновления файлов проекта PictureToLogic ===
+# ==============================================================================
+
+# --- Обновление MatrixBlueprint.java ---
+cat << 'EOF' > src/main/java/com/mkso4ka/mindustry/matrixproc/MatrixBlueprint.java
+package com.mkso4ka.mindustry.matrixproc;
+
+// Используем DPoint из библиотеки триангуляции
+import org.waveware.delaunator.DPoint;
+
+public class MatrixBlueprint {
+    public final int n, m;
+    // Поле должно быть типа DPoint[]
+    public final DPoint[] displayBottomLefts;
+
+    public MatrixBlueprint(int n, int m, DPoint[] displayBottomLefts) {
+        this.n = n;
+        this.m = m;
+        this.displayBottomLefts = displayBottomLefts;
+    }
+}
+EOF
+
+# --- Обновление DisplayMatrix.java ---
+cat << 'EOF' > src/main/java/com/mkso4ka/mindustry/matrixproc/DisplayMatrix.java
+package com.mkso4ka.mindustry.matrixproc;
+
+// Используем DPoint из библиотеки триангуляции
+import org.waveware.delaunator.DPoint;
+
+public class DisplayMatrix {
+    public MatrixBlueprint placeDisplaysXxY(int x, int y, int displaySize, int processorReach) {
+        int spacing = processorReach * 2;
+        int totalWidth = x * displaySize + (x - 1) * spacing;
+        int totalHeight = y * displaySize + (y - 1) * spacing;
+
+        // Создаем массив DPoint[]
+        DPoint[] displayBottomLefts = new DPoint[x * y];
+        int currentX = 0;
+        for (int i = 0; i < x; i++) {
+            int currentY = 0;
+            for (int j = 0; j < y; j++) {
+                // Создаем экземпляры DPoint
+                displayBottomLefts[i * y + j] = new DPoint(currentX, currentY);
+                currentY += displaySize + spacing;
+            }
+            currentX += displaySize + spacing;
+        }
+        return new MatrixBlueprint(totalWidth, totalHeight, displayBottomLefts);
+    }
+}
+EOF
+
+# --- Обновление DisplayInfo.java ---
+cat << 'EOF' > src/main/java/com/mkso4ka/mindustry/matrixproc/DisplayInfo.java
+package com.mkso4ka.mindustry.matrixproc;
+
+// Используем DPoint из библиотеки триангуляции
+import org.waveware.delaunator.DPoint;
+
+public class DisplayInfo {
+    // Поле должно быть типа DPoint
+    public final DPoint bottomLeft;
+    public final int id;
+
+    public DisplayInfo(DPoint bottomLeft, int id) {
+        this.bottomLeft = bottomLeft;
+        this.id = id;
+    }
+}
+EOF
+
+# --- Обновление DisplayProcessorMatrixFinal.java ---
+cat << 'EOF' > src/main/java/com/mkso4ka/mindustry/matrixproc/DisplayProcessorMatrixFinal.java
+package com.mkso4ka.mindustry.matrixproc;
+
+// Используем DPoint из библиотеки триангуляции
+import org.waveware.delaunator.DPoint;
+
+public class DisplayProcessorMatrixFinal {
+    final int n, m;
+    final int[] processorsPerDisplay;
+    // Поле должно быть типа DPoint[]
+    final DPoint[] displays;
+    final int displaySize;
+    private final Cell[][] matrix;
+    
+    public static final int PROCESSOR_REACH = 10;
+
+    // Конструктор принимает DPoint[]
+    public DisplayProcessorMatrixFinal(int n, int m, int[] processorsPerDisplay, DPoint[] displays, int displaySize) {
+        this.n = n;
+        this.m = m;
+        this.processorsPerDisplay = processorsPerDisplay;
+        this.displays = displays;
+        this.displaySize = displaySize;
+        this.matrix = new Cell[m][n];
+        for (int i = 0; i < m; i++) {
+            for (int j = 0; j < n; j++) {
+                matrix[i][j] = new Cell();
+            }
+        }
+        for (int i = 0; i < displays.length; i++) {
+            // p теперь типа DPoint, используем каст к int
+            DPoint p = displays[i];
+            for (int row = (int)p.y; row < (int)p.y + displaySize; row++) {
+                for (int col = (int)p.x; col < (int)p.x + displaySize; col++) {
+                    if (row < m && col < n) {
+                        matrix[row][col].type = 2;
+                        matrix[row][col].ownerId = i;
+                    }
+                }
+            }
+        }
+    }
+
+    public void placeProcessors() {
+        for (int i = 0; i < displays.length; i++) {
+            int processorsToPlace = processorsPerDisplay[i];
+            DPoint displayPos = displays[i];
+            int placed = 0;
+            // Используем каст к int для координат DPoint
+            int dispX = (int)displayPos.x;
+            int dispY = (int)displayPos.y;
+            for (int r = 1; r <= PROCESSOR_REACH && placed < processorsToPlace; r++) {
+                for (int j = dispX - r; j <= dispX + displaySize - 1 + r && placed < processorsToPlace; j++) {
+                    placed += tryPlaceProcessor(j, dispY - r, i, placed, processorsToPlace);
+                    placed += tryPlaceProcessor(j, dispY + displaySize - 1 + r, i, placed, processorsToPlace);
+                }
+                for (int j = dispY - r + 1; j <= dispY + displaySize - 1 + r - 1 && placed < processorsToPlace; j++) {
+                    placed += tryPlaceProcessor(dispX - r, j, i, placed, processorsToPlace);
+                    placed += tryPlaceProcessor(dispX + displaySize - 1 + r, j, i, placed, processorsToPlace);
+                }
+            }
+        }
+    }
+
+    private int tryPlaceProcessor(int x, int y, int ownerId, int placed, int toPlace) {
+        if (placed < toPlace && y >= 0 && y < m && x >= 0 && x < n && matrix[y][x].type == 0) {
+            matrix[y][x].type = 1;
+            matrix[y][x].ownerId = ownerId;
+            matrix[y][x].processorIndex = placed;
+            return 1;
+        }
+        return 0;
+    }
+
+    public Cell[][] getMatrix() { return matrix; }
+    // Метод возвращает DPoint[]
+    public DPoint[] getDisplays() { return displays; }
+
+    public static class Cell {
+        public int type = 0;
+        public int ownerId = -1;
+        public int processorIndex = -1;
+    }
+
+    public static int calculateMaxAvailableProcessors(int n, int m, int displaySize) {
+        DisplayMatrix displayMatrix = new DisplayMatrix();
+        MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(n, m, displaySize, PROCESSOR_REACH);
+
+        Cell[][] matrix = new Cell[blueprint.m][blueprint.n];
+        for (int i = 0; i < blueprint.m; i++) {
+            for (int j = 0; j < blueprint.n; j++) {
+                matrix[i][j] = new Cell();
+            }
+        }
+
+        for (int i = 0; i < blueprint.displayBottomLefts.length; i++) {
+            DPoint p = blueprint.displayBottomLefts[i];
+            for (int row = (int)p.y; row < (int)p.y + displaySize; row++) {
+                for (int col = (int)p.x; col < (int)p.x + displaySize; col++) {
+                    if (row < blueprint.m && col < blueprint.n) {
+                        matrix[row][col].type = 2;
+                    }
+                }
+            }
+        }
+
+        int availableSlots = 0;
+        for (int i = 0; i < blueprint.m; i++) {
+            for (int j = 0; j < blueprint.n; j++) {
+                if (matrix[i][j].type == 0) {
+                    availableSlots++;
+                }
+            }
+        }
+        return availableSlots;
+    }
+}
+EOF
+
+# --- Обновление ProcessingResult.java ---
+cat << 'EOF' > src/main/java/com/mkso4ka/mindustry/matrixproc/ProcessingResult.java
+package com.mkso4ka.mindustry.matrixproc;
+
+import mindustry.game.Schematic;
+// Используем DPoint из библиотеки триангуляции
+import org.waveware.delaunator.DPoint;
+
+public class ProcessingResult {
+    public final Schematic schematic;
+    public final DisplayProcessorMatrixFinal.Cell[][] matrix;
+    // Поле должно быть типа DPoint[]
+    public final DPoint[] displays;
+    public final int displaySize;
+
+    public ProcessingResult(Schematic schematic, DisplayProcessorMatrixFinal.Cell[][] matrix, DPoint[] displays, int displaySize) {
+        this.schematic = schematic;
+        this.matrix = matrix;
+        this.displays = displays;
+        this.displaySize = displaySize;
+    }
+}
+EOF
+
+# --- Обновление LogicCore.java ---
+cat << 'EOF' > src/main/java/com/mkso4ka/mindustry/matrixproc/LogicCore.java
 package com.mkso4ka.mindustry.matrixproc;
 
 import arc.files.Fi;
@@ -277,3 +496,6 @@ public class LogicCore {
         return String.format("draw color %d %d %d %d 0 0", r, g, b, a);
     }
 }
+EOF
+
+echo "Все файлы успешно обновлены!"

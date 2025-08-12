@@ -1,12 +1,14 @@
 package com.mkso4ka.mindustry.matrixproc;
 
+// Используем DPoint из библиотеки триангуляции
 import org.waveware.delaunator.DPoint;
 
 public class MatrixBlueprint {
-    final int n, m; // Ширина (n) и высота (m) итоговой матрицы в тайлах
-    final DPoint[] displayBottomLefts;
+    public final int n, m;
+    // Поле должно быть типа DPoint[]
+    public final DPoint[] displayBottomLefts;
 
-    MatrixBlueprint(int n, int m, DPoint[] displayBottomLefts) {
+    public MatrixBlueprint(int n, int m, DPoint[] displayBottomLefts) {
         this.n = n;
         this.m = m;
         this.displayBottomLefts = displayBottomLefts;
