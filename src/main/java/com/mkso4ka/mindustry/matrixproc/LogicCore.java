@@ -32,11 +32,9 @@ public class LogicCore {
             int displaySize = displayBlock.size;
             int displayPixelSize = getDisplayPixelSize(displaySize);
             
-            // Общие размеры изображения, которые будут занимать все дисплеи
             int totalDisplayWidth = displaysX * displayPixelSize;
             int totalDisplayHeight = displaysY * displayPixelSize;
 
-            // Масштабируем исходное изображение до суммарного размера всех дисплеев
             Pixmap scaledMasterPixmap = new Pixmap(totalDisplayWidth, totalDisplayHeight);
             scaledMasterPixmap.draw(masterPixmap, 0, 0, masterPixmap.width, masterPixmap.height, 0, 0, totalDisplayWidth, totalDisplayHeight);
             masterPixmap.dispose();
@@ -53,11 +51,9 @@ public class LogicCore {
                 for (int j = 0; j < displaysX; j++) {
                     int displayIndex = j * displaysY + i;
                     
-                    // Определяем область, которую покрывает ОДИН дисплей в глобальных координатах
                     int displayStartX = j * displayPixelSize;
                     int displayStartY = i * displayPixelSize;
 
-                    // Создаем слайс с границами (нахлестом) для бесшовной триангуляции
                     int sliceStartX = Math.max(0, displayStartX - BORDER_SIZE);
                     int sliceStartY = Math.max(0, displayStartY - BORDER_SIZE);
                     int sliceEndX = Math.min(totalDisplayWidth, displayStartX + displayPixelSize + BORDER_SIZE);
@@ -83,7 +79,6 @@ public class LogicCore {
                     ImageProcessor processor = new ImageProcessor(finalSlice);
                     ImageProcessor.ProcessingSteps steps = processor.process(detail, displayIndex);
                     
-                    // Передаем в генератор команд глобальные координаты начала слайса и дисплея
                     List<String> allCommands = generateTriangleCommandList(
                         steps.result, 
                         displayPixelSize, 
@@ -97,25 +92,49 @@ public class LogicCore {
                     allCommands.forEach(cmd -> fullCodeBuilder.append(cmd).append("\n"));
                     finalCodesForApi.add(new DisplayCodeInfo(displayIndex, fullCodeBuilder.toString(), displayPixelSize));
 
+                    // --- НАЧАЛО ИСПРАВЛЕННОГО БЛОКА ---
+
                     int safeMaxInstructions = maxInstructions - 1;
                     if (safeMaxInstructions < 1) safeMaxInstructions = 1;
 
                     List<String> finalProcessorCodes = new ArrayList<>();
                     if (!allCommands.isEmpty()) {
-                        List<String> currentChunkContent = new ArrayList<>();
+                        List<String> currentChunk = new ArrayList<>();
+                        String lastSeenColor = ""; 
+
                         for (String command : allCommands) {
-                            if (currentChunkContent.size() >= safeMaxInstructions) {
-                                currentChunkContent.add("drawflush display1");
-                                finalProcessorCodes.add(String.join("\n", currentChunkContent));
-                                currentChunkContent.clear();
+                            if (currentChunk.isEmpty()) {
+                                if (!command.startsWith("draw color")) {
+                                    if (!lastSeenColor.isEmpty()) {
+                                        currentChunk.add(lastSeenColor);
+                                    }
+                                }
                             }
-                            currentChunkContent.add(command);
+
+                            currentChunk.add(command);
+
+                            if (command.startsWith("draw color")) {
+                                lastSeenColor = command;
+                            }
+
+                            if (currentChunk.size() >= safeMaxInstructions) {
+                                if (currentChunk.get(currentChunk.size() - 1).startsWith("draw color")) {
+                                    currentChunk.remove(currentChunk.size() - 1);
+                                }
+
+                                currentChunk.add("drawflush display1");
+                                finalProcessorCodes.add(String.join("\n", currentChunk));
+                                currentChunk.clear();
+                            }
                         }
-                        if (!currentChunkContent.isEmpty()) {
-                            currentChunkContent.add("drawflush display1");
-                            finalProcessorCodes.add(String.join("\n", currentChunkContent));
+
+                        if (!currentChunk.isEmpty()) {
+                            currentChunk.add("drawflush display1");
+                            finalProcessorCodes.add(String.join("\n", currentChunk));
                         }
                     }
+                    
+                    // --- КОНЕЦ ИСПРАВЛЕННОГО БЛОКА ---
                     
                     codeMap.put(displayIndex, finalProcessorCodes);
                     processorsPerDisplay[displayIndex] = finalProcessorCodes.size();
@@ -208,7 +227,6 @@ public class LogicCore {
             if (!triangleList.isEmpty()) {
                 commands.add(formatColorCommand(entry.getKey()));
                 for (ImageProcessor.Triangle t : triangleList) {
-                    // 1. Получаем "глобальную" координату точки на большом отмасштабированном изображении
                     int globalX1 = sliceStartX + t.x1;
                     int globalY1 = sliceStartY + t.y1;
                     int globalX2 = sliceStartX + t.x2;
@@ -216,7 +234,6 @@ public class LogicCore {
                     int globalX3 = sliceStartX + t.x3;
                     int globalY3 = sliceStartY + t.y3;
 
-                    // 2. Преобразуем "глобальную" координату в "локальную" для текущего дисплея
                     int localX1 = globalX1 - displayStartX;
                     int localY1 = globalY1 - displayStartY;
                     int localX2 = globalX2 - displayStartX;
@@ -224,8 +241,6 @@ public class LogicCore {
                     int localX3 = globalX3 - displayStartX;
                     int localY3 = globalY3 - displayStartY;
 
-                    // 3. Инвертируем ось Y для Mindustry и ОГРАНИЧИВАЕМ результат
-                    // Ограничение все еще нужно, т.к. точки из нахлеста могут выйти за [0, maxCoord]
                     int x1 = Math.max(0, Math.min(maxCoord, localX1));
                     int y1 = maxCoord - Math.max(0, Math.min(maxCoord, localY1));
                     int x2 = Math.max(0, Math.min(maxCoord, localX2));
