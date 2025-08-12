@@ -21,7 +21,6 @@ ext {
 
 sourceCompatibility = 17
 
-// Репозитории теперь нужны только для Mindustry API
 repositories {
     mavenCentral()
     maven { url "https://raw.githubusercontent.com/Zelaux/MindustryRepo/master/repository" }
@@ -29,17 +28,13 @@ repositories {
 }
 
 dependencies {
-    // API игры, которое будет доступно при компиляции, но не войдет в итоговый JAR
     compileOnly "com.github.Anuken.Mindustry:core:${mindustryVersion}"
     compileOnly "com.github.Anuken.Arc:arc-core:${mindustryVersion}"
-    
-    // Ваши зависимости, которые ВОЙДУТ в итоговый JAR (так как их нет в игре)
     implementation fileTree(dir: 'libs', include: ['*.jar'])
 }
 
 processResources {
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
-    // Говорим Gradle: "Найди файл mod.hjson в ресурсах и примени к нему фильтр"
     filesMatching('mod.hjson') {
         filter(org.apache.tools.ant.filters.ReplaceTokens, tokens: [
             VERSION: project.version
@@ -47,59 +42,50 @@ processResources {
     }
 }
 
-// --- ИСПРАВЛЕННАЯ ЗАДАЧА JAR ---
-// Теперь она собирает "правильный" JAR, а не "толстый"
 jar {
     archiveBaseName = project.name
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-
-    // 1. Добавляем скомпилированные классы и ресурсы нашего мода
     from sourceSets.main.output
-
-    // 2. КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Используем runtimeClasspath.
-    // Это включает только 'implementation' зависимости (ваши JAR-файлы из папки libs),
-    // но ИГНОРИРУЕТ 'compileOnly' зависимости (Mindustry API), что резко уменьшает размер.
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
 }
 
-// Эта задача берет "правильный" JAR и конвертирует все классы в classes.dex
+// Задача для создания classes.dex
 task createDex(type: Exec) {
     dependsOn 'jar'
-    // Находим утилиту d8 в Android SDK
     def d8 = new File(System.getenv("ANDROID_HOME"), "build-tools/${findLatestBuildTools()}/d8" + (isWindows ? ".bat" : ""))
     
-    // Указываем, куда положить результат
-    def dexOutput = new File(buildDir, "dex/classes.dex")
+    // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+    // Указываем d8 на директорию для вывода, а не на сам файл.
+    def dexOutputDir = new File(buildDir, "dex")
     
     doFirst {
-        // Убеждаемся, что директория существует
-        dexOutput.parentFile.mkdirs()
+        // Убеждаемся, что эта директория существует перед запуском d8
+        dexOutputDir.mkdirs()
     }
 
-    // Запускаем d8, передавая ему наш JAR и путь для выходного файла
-    commandLine d8, "--release", "--output", dexOutput, tasks.jar.archiveFile.get().asFile
+    // Передаем d8 директорию в качестве параметра --output
+    commandLine d8, "--release", "--output", dexOutputDir, tasks.jar.archiveFile.get().asFile
 }
 
-// Задача deploy теперь собирает финальный, универсальный JAR для PC и Android
+// Задача для сборки финального JAR
 task deploy(type: Jar, dependsOn: createDex) {
-    // Финальное имя файла без версий и классификаторов
     archiveBaseName = "PictureToLogic"
     archiveClassifier = null
     archiveVersion = '' 
-
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
 
     // 1. Включаем ресурсы (mod.hjson)
     from sourceSets.main.resources
     
-    // 2. Включаем ресурсы из наших зависимостей (например, LICENSE файлы), но не их классы
+    // 2. Включаем ресурсы из зависимостей, но не их классы
     from(configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it).matching{
         exclude '**/*.class'
     }})
 
     // 3. Добавляем в корень архива созданный classes.dex
+    // Этот код остался без изменений, так как он правильно берет все из папки /build/dex/
     from(new File(buildDir, "dex")) {
         into '/'
     }
@@ -113,7 +99,10 @@ task deploy(type: Jar, dependsOn: createDex) {
 String findLatestBuildTools(){
     def buildTools = new File(System.getenv("ANDROID_HOME"), "build-tools")
     if(!buildTools.exists()) return ""
-    return buildTools.listFiles().sort{ a, b ->
-        b.name.replace("-preview", ".0").compareTo(a.name.replace("-preview", ".0"))
-    }[0].name
+    // В CI окружении может быть много версий, находим самую свежую стабильную.
+    return buildTools.listFiles()
+            .collect { it.name }
+            .sort()
+            .reverse()
+            .find { !it.contains("rc") } // Игнорируем release candidates
 }
