@@ -170,7 +170,8 @@ public class ImageProcessor {
         Pixmap edgePixmap = new Pixmap(width, height);
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-                int gray = (int)(edgeMap[x][y] * 255);
+                // Умножаем на 5, чтобы сделать границы ярче на отладочном изображении
+                int gray = (int)(Math.min(1.0f, edgeMap[x][y] * 5.0f) * 255);
                 edgePixmap.set(x, y, Color.rgba8888(gray, gray, gray, 255));
             }
         }
@@ -195,15 +196,48 @@ public class ImageProcessor {
             edgeMap[x][y] /= maxGradient;
         }}} return edgeMap;
     }
+    // Поместите этот код в класс ImageProcessor.java, заменив существующий метод placePoints
     private List<DPoint> placePoints(float[][] edgeMap, int maxPoints) {
-        List<DPoint> points = new ArrayList<>(); Random random = new Random(0);
-        points.add(new DPoint(0, 0)); points.add(new DPoint(width - 1, 0)); points.add(new DPoint(0, height - 1)); points.add(new DPoint(width - 1, height - 1));
-        points.add(new DPoint(width / 2, 0)); points.add(new DPoint(width / 2, height - 1)); points.add(new DPoint(0, height / 2)); points.add(new DPoint(width - 1, height / 2));
-        for (int i = 0; i < maxPoints * 10 && points.size() < maxPoints; i++) {
-            int x = random.nextInt(width); int y = random.nextInt(height);
-            if (random.nextFloat() < edgeMap[x][y]) { points.add(new DPoint(x, y)); }
+        List<DPoint> points = new ArrayList<>();
+        Random random = new Random(0); // Используем фиксированный seed для повторяемости
+    
+        // 1. Добавляем обязательные точки по краям и в центре, чтобы гарантировать охват всего изображения
+        points.add(new DPoint(0, 0));
+        points.add(new DPoint(width - 1, 0));
+        points.add(new DPoint(0, height - 1));
+        points.add(new DPoint(width - 1, height - 1));
+        points.add(new DPoint(width / 2, 0));
+        points.add(new DPoint(width / 2, height - 1));
+        points.add(new DPoint(0, height / 2));
+        points.add(new DPoint(width - 1, height / 2));
+    
+        // 2. Собираем все точки-кандидаты, которые лежат на границах
+        List<DPoint> edgeCandidates = new ArrayList<>();
+        // Порог можно настроить. 0.1 - хорошее начало.
+        // Чем он ниже, тем более слабые границы будут учитываться.
+        float threshold = 0.1f; 
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                if (edgeMap[x][y] > threshold) {
+                    edgeCandidates.add(new DPoint(x, y));
+                }
+            }
         }
-        while (points.size() < maxPoints) { points.add(new DPoint(random.nextInt(width), random.nextInt(height))); }
+        WebLogger.info("Найдено %d точек-кандидатов на границах (порог > %.2f)", edgeCandidates.size(), threshold);
+    
+        // 3. Перемешиваем кандидатов и добавляем нужное количество в итоговый список
+        java.util.Collections.shuffle(edgeCandidates, random);
+        int pointsToAdd = Math.min(maxPoints - points.size(), edgeCandidates.size());
+        if (pointsToAdd > 0) {
+            points.addAll(edgeCandidates.subList(0, pointsToAdd));
+        }
+    
+        // 4. Если точек все еще не хватает (например, на почти пустом изображении), 
+        // добиваем случайными, как и раньше.
+        while (points.size() < maxPoints) {
+            points.add(new DPoint(random.nextInt(width), random.nextInt(height)));
+        }
+    
         return points;
     }
     private Map<Integer, List<Triangle>> colorTriangles(Delaunator delaunator, List<DPoint> points) {
