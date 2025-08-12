@@ -146,6 +146,17 @@ public class WebLogger extends NanoHTTPD {
         }
     }
 
+    public static void logImage(String name, byte[] pngData) {
+        if (!ENABLE_WEB_LOGGER || pngData == null) return;
+        try 
+        {
+            debugImages.put(name + ".png", pngData); // Добавляем расширение для ясности
+        } 
+        catch (Exception e) 
+        {
+            err("Failed to log image byte array %s", e, name);
+        }
+    }
     public static void clearDebugImages() {
         if (ENABLE_WEB_LOGGER) {
             debugImages.clear();
