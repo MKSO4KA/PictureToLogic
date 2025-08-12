@@ -1,17 +1,17 @@
 package com.mkso4ka.mindustry.matrixproc;
 
-// ИСПРАВЛЕНИЕ: Импортируем DPoint
 import org.waveware.delaunator.DPoint;
 
 public class DisplayProcessorMatrixFinal {
     final int n, m;
     final int[] processorsPerDisplay;
-    final DPoint[] displays; // ИСПРАВЛЕНО: Тип изменен на DPoint[]
+    final DPoint[] displays;
     final int displaySize;
     private final Cell[][] matrix;
-    public static final int PROCESSOR_REACH = 8;
+    
+    public static final int PROCESSOR_REACH = 10;
 
-    public DisplayProcessorMatrixFinal(int n, int m, int[] processorsPerDisplay, DPoint[] displays, int displaySize) { // ИСПРАВЛЕНО
+    public DisplayProcessorMatrixFinal(int n, int m, int[] processorsPerDisplay, DPoint[] displays, int displaySize) {
         this.n = n;
         this.m = m;
         this.processorsPerDisplay = processorsPerDisplay;
@@ -24,9 +24,9 @@ public class DisplayProcessorMatrixFinal {
             }
         }
         for (int i = 0; i < displays.length; i++) {
-            DPoint p = displays[i]; // ИСПРАВЛЕНО
-            for (int row = (int)p.y; row < (int)p.y + displaySize; row++) { // ИСПРАВЛЕНО: Приведение к int
-                for (int col = (int)p.x; col < (int)p.x + displaySize; col++) { // ИСПРАВЛЕНО: Приведение к int
+            DPoint p = displays[i];
+            for (int row = (int)p.y; row < (int)p.y + displaySize; row++) {
+                for (int col = (int)p.x; col < (int)p.x + displaySize; col++) {
                     if (row < m && col < n) {
                         matrix[row][col].type = 2;
                         matrix[row][col].ownerId = i;
@@ -39,14 +39,14 @@ public class DisplayProcessorMatrixFinal {
     public void placeProcessors() {
         for (int i = 0; i < displays.length; i++) {
             int processorsToPlace = processorsPerDisplay[i];
-            DPoint displayPos = displays[i]; // ИСПРАВЛЕНО
+            DPoint displayPos = displays[i];
             int placed = 0;
             for (int r = 1; r <= PROCESSOR_REACH && placed < processorsToPlace; r++) {
-                for (int j = (int)displayPos.x - r; j <= (int)displayPos.x + displaySize - 1 + r && placed < processorsToPlace; j++) { // ИСПРАВЛЕНО
+                for (int j = (int)displayPos.x - r; j <= (int)displayPos.x + displaySize - 1 + r && placed < processorsToPlace; j++) {
                     placed += tryPlaceProcessor(j, (int)displayPos.y - r, i, placed, processorsToPlace);
                     placed += tryPlaceProcessor(j, (int)displayPos.y + displaySize - 1 + r, i, placed, processorsToPlace);
                 }
-                for (int j = (int)displayPos.y - r + 1; j <= (int)displayPos.y + displaySize - 1 + r - 1 && placed < processorsToPlace; j++) { // ИСПРАВЛЕНО
+                for (int j = (int)displayPos.y - r + 1; j <= (int)displayPos.y + displaySize - 1 + r - 1 && placed < processorsToPlace; j++) {
                     placed += tryPlaceProcessor((int)displayPos.x - r, j, i, placed, processorsToPlace);
                     placed += tryPlaceProcessor((int)displayPos.x + displaySize - 1 + r, j, i, placed, processorsToPlace);
                 }
@@ -65,7 +65,7 @@ public class DisplayProcessorMatrixFinal {
     }
 
     public Cell[][] getMatrix() { return matrix; }
-    public DPoint[] getDisplays() { return displays; } // ИСПРАВЛЕНО
+    public DPoint[] getDisplays() { return displays; }
 
     public static class Cell {
         public int type = 0;
@@ -77,33 +77,44 @@ public class DisplayProcessorMatrixFinal {
         DisplayMatrix displayMatrix = new DisplayMatrix();
         MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(n, m, displaySize, PROCESSOR_REACH);
 
-        Cell[][] matrix = new Cell[blueprint.m][blueprint.n];
+        Cell[][] tempMatrix = new Cell[blueprint.m][blueprint.n];
         for (int i = 0; i < blueprint.m; i++) {
             for (int j = 0; j < blueprint.n; j++) {
-                matrix[i][j] = new Cell();
+                tempMatrix[i][j] = new Cell();
             }
         }
 
-        for (int i = 0; i < blueprint.displayBottomLefts.length; i++) {
-            DPoint p = blueprint.displayBottomLefts[i]; // ИСПРАВЛЕНО
-            for (int row = (int)p.y; row < (int)p.y + displaySize; row++) { // ИСПРАВЛЕНО
-                for (int col = (int)p.x; col < (int)p.x + displaySize; col++) { // ИСПРАВЛЕНО
+        for (DPoint p : blueprint.displayBottomLefts) {
+            for (int row = (int)p.y; row < (int)p.y + displaySize; row++) {
+                for (int col = (int)p.x; col < (int)p.x + displaySize; col++) {
                     if (row < blueprint.m && col < blueprint.n) {
-                        matrix[row][col].type = 2;
-                        matrix[row][col].ownerId = i;
+                        tempMatrix[row][col].type = 2;
                     }
                 }
             }
         }
 
         int availableSlots = 0;
-        for (int i = 0; i < blueprint.m; i++) {
-            for (int j = 0; j < blueprint.n; j++) {
-                if (matrix[i][j].type == 0) {
-                    availableSlots++;
+        for (DPoint displayPos : blueprint.displayBottomLefts) {
+            for (int r = 1; r <= PROCESSOR_REACH; r++) {
+                for (int j = (int)displayPos.x - r; j <= (int)displayPos.x + displaySize - 1 + r; j++) {
+                    availableSlots += tryCountSlot(j, (int)displayPos.y - r, tempMatrix);
+                    availableSlots += tryCountSlot(j, (int)displayPos.y + displaySize - 1 + r, tempMatrix);
+                }
+                for (int j = (int)displayPos.y - r + 1; j <= (int)displayPos.y + displaySize - 1 + r - 1; j++) {
+                    availableSlots += tryCountSlot((int)displayPos.x - r, j, tempMatrix);
+                    availableSlots += tryCountSlot((int)displayPos.x + displaySize - 1 + r, j, tempMatrix);
                 }
             }
         }
         return availableSlots;
+    }
+
+    private static int tryCountSlot(int x, int y, Cell[][] matrix) {
+        if (y >= 0 && y < matrix.length && x >= 0 && x < matrix[0].length && matrix[y][x].type == 0) {
+            matrix[y][x].type = 1;
+            return 1;
+        }
+        return 0;
     }
 }

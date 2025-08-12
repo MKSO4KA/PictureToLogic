@@ -12,7 +12,7 @@ import mindustry.world.Tile;
 import mindustry.world.blocks.logic.LogicBlock;
 import mindustry.world.blocks.logic.LogicBlock.LogicLink;
 import mindustry.world.blocks.logic.LogicDisplay;
-import org.waveware.delaunator.DPoint; // ИСПРАВЛЕНИЕ: Импортируем DPoint
+import org.waveware.delaunator.DPoint;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,7 +21,6 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class LogicCore {
-    // ... (код до buildSchematic остается без изменений)
     private static final int BORDER_SIZE = 8;
 
     private static class SliceProcessingResult {
@@ -161,7 +160,7 @@ public class LogicCore {
         return finalProcessorCodes;
     }
 
-    private Schematic buildSchematic(DisplayProcessorMatrixFinal.Cell[][] matrix, DPoint[] displays, Map<Integer, List<String>> codeMap, Block displayBlock) { // ИСПРАВЛЕНО
+    private Schematic buildSchematic(DisplayProcessorMatrixFinal.Cell[][] matrix, DPoint[] displays, Map<Integer, List<String>> codeMap, Block displayBlock) {
         Seq<Stile> tiles = new Seq<>();
         int height = matrix.length;
         int width = matrix[0].length;
@@ -173,7 +172,7 @@ public class LogicCore {
                 if (cell.type == 1 && cell.ownerId >= 0 && cell.processorIndex >= 0) {
                     short schemX = (short)col;
                     short schemY = (short)row;
-                    DPoint ownerDisplay = displays[cell.ownerId]; // ИСПРАВЛЕНО
+                    DPoint ownerDisplay = displays[cell.ownerId];
                     
                     String code = "### ERROR: Code not found ###";
                     List<String> codesForDisplay = codeMap.get(cell.ownerId);
@@ -187,10 +186,10 @@ public class LogicCore {
                     LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
                     build.tile = new Tile(schemX, schemY);
 
-                    int displayMinX = (int)ownerDisplay.x; // ИСПРАВЛЕНО
-                    int displayMinY = (int)ownerDisplay.y; // ИСПРАВЛЕНО
-                    int displayMaxX = (int)ownerDisplay.x + displayBlock.size - 1; // ИСПРАВЛЕНО
-                    int displayMaxY = (int)ownerDisplay.y + displayBlock.size - 1; // ИСПРАВЛЕНО
+                    int displayMinX = (int)ownerDisplay.x;
+                    int displayMinY = (int)ownerDisplay.y;
+                    int displayMaxX = (int)ownerDisplay.x + displayBlock.size - 1;
+                    int displayMaxY = (int)ownerDisplay.y + displayBlock.size - 1;
                     int linkToX = Math.max(displayMinX, Math.min(schemX, displayMaxX));
                     int linkToY = Math.max(displayMinY, Math.min(schemY, displayMaxY));
                     build.links.add(new LogicLink(linkToX, linkToY, "display1", true));
@@ -202,9 +201,9 @@ public class LogicCore {
             }
         }
 
-        for (DPoint display : displays) { // ИСПРАВЛЕНО
-            short finalX = (short)display.x; // ИСПРАВЛЕНО
-            short finalY = (short)display.y; // ИСПРАВЛЕНО
+        for (DPoint display : displays) {
+            short finalX = (short)display.x;
+            short finalY = (short)display.y;
             if (displayBlock.size == 6) { finalX += 2; finalY += 2; }
             else if (displayBlock.size == 3) { finalX += 1; finalY += 1; }
             tiles.add(new Stile(displayBlock, finalX, finalY, null, (byte) 0));
