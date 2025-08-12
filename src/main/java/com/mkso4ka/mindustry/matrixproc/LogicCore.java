@@ -69,8 +69,9 @@ public class LogicCore {
                     }
 
                     ImageProcessor processor = new ImageProcessor(finalSlice);
-                    ImageProcessor.ProcessingSteps steps = processor.process(tolerance, diffusionIterations, diffusionContrast);
-                    
+                    // Стало:
+                    ImageProcessor.ProcessingSteps steps = processor.process(tolerance, diffusionIterations, diffusionContrast, displayIndex);
+    
                     int offsetX = (j > 0) ? BORDER_SIZE : 0;
                     int offsetY = (i > 0) ? BORDER_SIZE : 0;
                     List<String> allCommands = generateTriangleCommandList(steps.result, displayPixelSize, offsetX, offsetY);

@@ -38,17 +38,64 @@ public class ImageProcessor {
         this.height = pixmap.getHeight();
     }
 
-    public ProcessingSteps process(double tolerance, int diffusionIterations, float diffusionContrast) {
+    // --- ГЛАВНЫЙ ИЗМЕНЕННЫЙ МЕТОД ---
+    public ProcessingSteps process(double tolerance, int diffusionIterations, float diffusionContrast, int displayId) {
         int maxPoints = (int)(5000 - tolerance * 1500);
 
+        // --- ЭТАП 1: Обнаружение краев (Sobel) ---
         float[][] edgeMap = sobelEdgeDetect(originalPixmap);
+        logEdgeMap(edgeMap, displayId);
+
+        // --- ЭТАП 2: Расстановка точек ---
         List<DPoint> points = placePoints(edgeMap, maxPoints);
+        logPlacedPoints(points, displayId);
+
+        // --- ЭТАП 3: Триангуляция и раскраска ---
         Delaunator delaunator = new Delaunator(points);
         Map<Integer, List<Triangle>> trianglesByColor = colorTriangles(delaunator, points);
+        logFinalTriangulation(trianglesByColor, displayId);
         
-        WebLogger.info("Triangulation complete. Generated %d triangles.", delaunator.triangles.length / 3);
+        WebLogger.info("Triangulation for display #%d complete. Generated %d triangles.", displayId, delaunator.triangles.length / 3);
 
         return new ProcessingSteps(trianglesByColor);
+    }
+
+    private void logEdgeMap(float[][] edgeMap, int displayId) {
+        Pixmap edgePixmap = new Pixmap(width, height);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int gray = (int)(edgeMap[x][y] * 255);
+                edgePixmap.set(x, y, Color.rgba8888(gray, gray, gray, 255));
+            }
+        }
+        WebLogger.logImage(String.format("slice_%d_1_EdgeMap", displayId), edgePixmap);
+        edgePixmap.dispose();
+    }
+
+    private void logPlacedPoints(List<DPoint> points, int displayId) {
+        Pixmap pointsPixmap = originalPixmap.copy();
+        pointsPixmap.setColor(Color.green);
+        for (DPoint p : points) {
+            // Рисуем точку 3x3 для лучшей видимости
+            pointsPixmap.fillCircle((int) p.x, (int) p.y, 1);
+        }
+        WebLogger.logImage(String.format("slice_%d_2_PlacedPoints", displayId), pointsPixmap);
+        pointsPixmap.dispose();
+    }
+    
+    private void logFinalTriangulation(Map<Integer, List<Triangle>> trianglesByColor, int displayId) {
+        Pixmap finalTrianglesPixmap = new Pixmap(width, height);
+        // Отключаем смешивание, чтобы цвета точно соответствовали
+        finalTrianglesPixmap.setBlending(Pixmap.Blending.None);
+        
+        for (Map.Entry<Integer, List<Triangle>> entry : trianglesByColor.entrySet()) {
+            finalTrianglesPixmap.setColor(entry.getKey());
+            for (Triangle t : entry.getValue()) {
+                finalTrianglesPixmap.fillTriangle(t.x1, t.y1, t.x2, t.y2, t.x3, t.y3);
+            }
+        }
+        WebLogger.logImage(String.format("slice_%d_3_FinalTriangulation", displayId), finalTrianglesPixmap);
+        finalTrianglesPixmap.dispose();
     }
 
     private float[][] sobelEdgeDetect(Pixmap source) {
@@ -129,7 +176,7 @@ public class ImageProcessor {
 
             int color = originalPixmap.get(centerX, centerY);
             
-            if ((color & 0xff) > 10) {
+            if ((color & 0xff) > 10) { // Проверка альфа-канала
                 Triangle t = new Triangle((int)p1.x, (int)p1.y, (int)p2.x, (int)p2.y, (int)p3.x, (int)p3.y);
                 trianglesByColor.computeIfAbsent(color, k -> new ArrayList<>()).add(t);
             }
