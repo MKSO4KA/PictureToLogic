@@ -47,17 +47,21 @@ processResources {
 }
 
 jar {
-    archiveBaseName = project.name + "-Desktop"
+    // Устанавливаем имя файла
+    archiveBaseName = project.name
 
-    // Добавляем стратегию обработки дубликатов. EXCLUDE - просто пропускать дубликаты.
+    // Стратегия обработки дубликатов
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
-    // Добавляем скомпилированные классы и ресурсы вашего мода
+    // Добавляем в архив скомпилированные классы и ресурсы (включая mod.hjson)
     from sourceSets.main.output
 
-    // Добавляем содержимое ТОЛЬКО JAR-файлов из зависимостей
+    // КЛЮЧЕВОЕ ИЗМЕНЕНИЕ:
+    // Мы добавляем зависимости из 'compileClasspath', а не 'runtimeClasspath'.
+    // Это правильный способ для создания "fat JAR" в данном контексте,
+    // он включает всё необходимое без создания конфликтов.
     from {
-        configurations.runtimeClasspath.findAll { it.name.endsWith('.jar') }.collect { zipTree(it) }
+        configurations.compileClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
 }
 task jarAndroid (type: Jar, dependsOn: jar){
