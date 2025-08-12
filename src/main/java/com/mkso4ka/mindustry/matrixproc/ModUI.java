@@ -19,8 +19,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class ModUI {
 
     private static LogicDisplay selectedDisplay = (LogicDisplay) Blocks.largeLogicDisplay;
-    private static Slider xSlider, ySlider, toleranceSlider, instructionsSlider;
-    private static Label xLabel, yLabel, toleranceLabel, instructionsLabel, pointsLabel;
+    private static Slider xSlider, ySlider, toleranceSlider, instructionsSlider, diffusionIterSlider, diffusionKSlider;
+    private static Label xLabel, yLabel, toleranceLabel, instructionsLabel, diffusionIterLabel, diffusionKLabel;
     private static CheckBox transparentBgCheck;
     private static Table previewTable;
     private static Label availableProcessorsLabel, requiredProcessorsLabel, statusLabel;
@@ -45,6 +45,7 @@ public class ModUI {
         Table mainTable = new Table();
         Table leftPanel = new Table();
         leftPanel.defaults().pad(2).left();
+
         leftPanel.add("[accent]1. Настройки сетки[]").colspan(3).row();
         xSlider = new Slider(1, 10, 1, false);
         ySlider = new Slider(1, 10, 1, false);
@@ -55,19 +56,30 @@ public class ModUI {
         leftPanel.add("Дисплеев по Y:");
         leftPanel.add(ySlider).width(200f).pad(5);
         leftPanel.add(yLabel).row();
-        leftPanel.add("[accent]2. Настройки качества[]").colspan(3).padTop(15).row();
-        toleranceSlider = new Slider(0.1f, 6f, 0.1f, false);
-        toleranceSlider.setValue(1.0f);
-        toleranceLabel = new Label("1.0");
-        pointsLabel = new Label("");
-        leftPanel.add("Детализация:");
-        leftPanel.add(toleranceSlider).width(200f).pad(5);
-        leftPanel.add(toleranceLabel).row();
-        leftPanel.add();
-        leftPanel.add(pointsLabel).colspan(2).left().padLeft(5).row();
+
+        leftPanel.add("[accent]2. Оптимизация изображения[]").colspan(3).padTop(15).row();
         transparentBgCheck = new CheckBox(" Прозрачный фон");
         transparentBgCheck.setChecked(true);
-        leftPanel.add(transparentBgCheck).colspan(3).left().padTop(5).row();
+        leftPanel.add(transparentBgCheck).colspan(3).left().row();
+        diffusionIterSlider = new Slider(0, 10, 1, false);
+        diffusionIterSlider.setValue(5);
+        diffusionIterLabel = new Label("5");
+        leftPanel.add("Сила сглаживания:");
+        leftPanel.add(diffusionIterSlider).width(200f).pad(5);
+        leftPanel.add(diffusionIterLabel).row();
+        diffusionKSlider = new Slider(1, 25, 0.5f, false);
+        diffusionKSlider.setValue(10);
+        diffusionKLabel = new Label("10.0");
+        leftPanel.add("Сохранение краев:");
+        leftPanel.add(diffusionKSlider).width(200f).pad(5);
+        leftPanel.add(diffusionKLabel).row();
+        toleranceSlider = new Slider(0, 3, 0.1f, false);
+        toleranceSlider.setValue(1.5f);
+        toleranceLabel = new Label("1.5");
+        leftPanel.add("Допуск цвета (Delta E):");
+        leftPanel.add(toleranceSlider).width(200f).pad(5);
+        leftPanel.add(toleranceLabel).row();
+
         leftPanel.add("[accent]3. Настройки вывода[]").colspan(3).padTop(15).row();
         instructionsSlider = new Slider(100, 1000, 100, false);
         instructionsSlider.setValue(1000);
@@ -75,6 +87,7 @@ public class ModUI {
         leftPanel.add("Макс. инструкций:");
         leftPanel.add(instructionsSlider).width(200f).pad(5);
         leftPanel.add(instructionsLabel).row();
+        
         leftPanel.add("[accent]4. Статистика процессоров[]").colspan(3).padTop(15).row();
         availableProcessorsLabel = new Label("");
         requiredProcessorsLabel = new Label("");
@@ -82,6 +95,7 @@ public class ModUI {
         leftPanel.add(availableProcessorsLabel).colspan(3).row();
         leftPanel.add(requiredProcessorsLabel).colspan(3).row();
         leftPanel.add(statusLabel).colspan(3).padTop(5).row();
+
         Table rightPanel = new Table();
         previewTable = new Table();
         previewTable.setBackground(Tex.buttonDown);
@@ -100,6 +114,7 @@ public class ModUI {
         displaySelector.add(largeLogicDisplayButton).size(70, 60).padLeft(10);
         rightPanel.add("Тип дисплея:").row();
         rightPanel.add(displaySelector).row();
+
         mainTable.add(leftPanel);
         mainTable.add(rightPanel).padLeft(20);
         content.add(mainTable).row();
@@ -115,36 +130,43 @@ public class ModUI {
             }
         });
         content.button("Выбрать и создать чертеж", Icon.file, fileChooserAction).padTop(10).growX().height(60);
+
         xSlider.changed(() -> { xLabel.setText(String.valueOf((int)xSlider.getValue())); updatePreview(); updateProcessorEstimationLabels(); });
         ySlider.changed(() -> { yLabel.setText(String.valueOf((int)ySlider.getValue())); updatePreview(); updateProcessorEstimationLabels(); });
-        toleranceSlider.changed(ModUI::updateDetailLabels);
+        toleranceSlider.changed(() -> { toleranceLabel.setText(String.format("%.1f", toleranceSlider.getValue())); updateProcessorEstimationLabels(); });
         instructionsSlider.changed(() -> { instructionsLabel.setText(String.valueOf((int)instructionsSlider.getValue())); updateProcessorEstimationLabels(); });
+        diffusionIterSlider.changed(() -> diffusionIterLabel.setText(String.valueOf((int)diffusionIterSlider.getValue())));
+        diffusionKSlider.changed(() -> diffusionKLabel.setText(String.format("%.1f", diffusionKSlider.getValue())));
+        
         updatePreview();
-        updateDetailLabels();
-        dialog.show();
-    }
-    
-    private static void updateDetailLabels() {
-        float detailValue = toleranceSlider.getValue();
-        int maxPoints = (int)(500 + detailValue * 1500);
-        toleranceLabel.setText(String.format("%.1f", detailValue));
-        pointsLabel.setText(String.format("[gray](Примерно %d точек на слайс)[]", maxPoints));
         updateProcessorEstimationLabels();
+        dialog.show();
     }
     
     private static void updateProcessorEstimationLabels() {
         int displaysX = (int) xSlider.getValue();
         int displaysY = (int) ySlider.getValue();
         int displaySize = selectedDisplay.size;
-        float detailValue = toleranceSlider.getValue();
+        double tolerance = toleranceSlider.getValue();
         int maxInstructions = (int) instructionsSlider.getValue();
-        int availableSlots = DisplayProcessorMatrixFinal.calculateMaxAvailableProcessors(displaysX, displaysY, displaySize);
+        
+        DisplayMatrix displayMatrix = new DisplayMatrix();
+        MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, DisplayProcessorMatrixFinal.PROCESSOR_REACH);
+        DisplayProcessorMatrixFinal tempMatrix = new DisplayProcessorMatrixFinal(blueprint.n, blueprint.m, new int[displaysX*displaysY], blueprint.displayBottomLefts, displaySize);
+        int availableSlots = 0;
+        for(DisplayProcessorMatrixFinal.Cell[] row : tempMatrix.getMatrix()){
+            for(DisplayProcessorMatrixFinal.Cell cell : row){
+                if(cell.type == 0 && tempMatrix.isWithinProcessorReachOfAnyDisplay(new arc.math.geom.Point2(cell.x, cell.y))) availableSlots++;
+            }
+        }
         availableProcessorsLabel.setText("Максимум доступно процессоров: [accent]" + availableSlots + "[]");
-        int maxPoints = (int)(500 + detailValue * 1500);
+
+        int maxPoints = (int)(5000 - tolerance * 1500);
         double commandsPerSlice = maxPoints * 2.1; 
         int requiredPerSlice = (int)Math.ceil(commandsPerSlice / (maxInstructions - 1));
         int totalRequired = requiredPerSlice * displaysX * displaysY;
         requiredProcessorsLabel.setText("Примерно потребуется: [accent]" + totalRequired + "[]");
+
         if (totalRequired <= availableSlots) {
             statusLabel.setText("Статус: [green]OK, места должно хватить.[]");
         } else if (totalRequired <= availableSlots * 1.2) {
@@ -182,12 +204,14 @@ public class ModUI {
             try {
                 int displaysX = (int) xSlider.getValue();
                 int displaysY = (int) ySlider.getValue();
-                double detail = toleranceSlider.getValue();
+                double tolerance = toleranceSlider.getValue();
                 int maxInstructions = (int)instructionsSlider.getValue();
+                int diffusionIterations = (int)diffusionIterSlider.getValue();
+                float diffusionContrast = diffusionKSlider.getValue();
                 boolean useTransparentBg = transparentBgCheck.isChecked();
 
                 LogicCore logic = new LogicCore();
-                result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay, detail, maxInstructions, useTransparentBg, cancellationToken);
+                result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay, tolerance, maxInstructions, diffusionIterations, diffusionContrast, useTransparentBg, cancellationToken);
             } catch (Exception e) {
                 WebLogger.err("Критическая ошибка при создании чертежа!", e);
             } finally {
@@ -219,7 +243,7 @@ public class ModUI {
         Table cont = confirmDialog.cont;
         cont.add("[accent]Чертеж готов![]").colspan(2).row();
         cont.add("Размер схемы:").left().padTop(10);
-        cont.add(String.format("%d x %d", result.schematic.width, result.schematic.height)).right().row();
+        cont.add(String.format("%d x %d", result.matrixWidth, result.matrixHeight)).right().row();
         cont.add("Количество дисплеев:").left();
         cont.add(String.valueOf(result.displays.length)).right().row();
         cont.add("Количество процессоров:").left();
