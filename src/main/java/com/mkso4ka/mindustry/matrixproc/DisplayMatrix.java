@@ -1,35 +1,37 @@
 package com.mkso4ka.mindustry.matrixproc;
 
-import org.waveware.delaunator.DPoint;
+import static java.lang.Math.ceil;
+import static java.lang.Math.max;
 
-public class DisplayMatrix {
-    public MatrixBlueprint placeDisplaysXxY(int x, int y, int displaySize, int processorReach) {
-        // Расстояние между краями соседних дисплеев
-        int spacing = processorReach * 2;
-        
-        // --- ИСПРАВЛЕНИЕ: Правильный расчет общего размера сетки ---
-        
-        // Сначала считаем размер "контентной" части (только дисплеи и промежутки)
-        int contentWidth = x * displaySize + Math.max(0, x - 1) * spacing;
-        int contentHeight = y * displaySize + Math.max(0, y - 1) * spacing;
-        
-        // Затем добавляем поля (PROCESSOR_REACH) со всех сторон
-        int totalGridWidth = contentWidth + 2 * processorReach;
-        int totalGridHeight = contentHeight + 2 * processorReach;
+/**
+ * Вычисляет общие размеры схемы и координаты нижних левых углов для каждого дисплея.
+ */
+class DisplayMatrix {
+    public DisplayMatrix() {}
 
-        DPoint[] displayBottomLefts = new DPoint[x * y];
-        
-        // --- ИСПРАВЛЕНИЕ: Начинаем размещение с отступом, равным радиусу ---
-        int currentX = processorReach; 
-        for (int i = 0; i < x; i++) {
-            int currentY = processorReach; // Сбрасываем Y для каждого нового столбца
-            for (int j = 0; j < y; j++) {
-                displayBottomLefts[i * y + j] = new DPoint(currentX, currentY);
-                currentY += displaySize + spacing;
+    public MatrixBlueprint placeDisplaysXxY(int x, int y, int displaySize, double processorReach) {
+        int border = (int) ceil(processorReach) + 1;
+        int spacing = 0;
+
+        int n = border * 2 + y * displaySize + max(0, y - 1) * spacing;
+        int m = border * 2 + x * displaySize + max(0, x - 1) * spacing;
+
+        int[][] bottomLefts = new int[y * x][2];
+        int startOffset = border;
+        int count = 0;
+
+        for (int j = 0; j < x; j++) {
+            for (int i = 0; i < y; i++) {
+                int topLeftX = startOffset + j * displaySize;
+                bottomLefts[count][0] = topLeftX;
+
+                int topLeftY_java = startOffset + i * displaySize;
+                int bottomLeftY_java = topLeftY_java + displaySize - 1;
+                bottomLefts[count][1] = (n - 1) - bottomLeftY_java;
+
+                count++;
             }
-            currentX += displaySize + spacing;
         }
-        
-        return new MatrixBlueprint(totalGridWidth, totalGridHeight, displayBottomLefts);
+        return new MatrixBlueprint(n, m, bottomLefts);
     }
 }

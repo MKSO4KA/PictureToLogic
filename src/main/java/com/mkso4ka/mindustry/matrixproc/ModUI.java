@@ -2,6 +2,7 @@ package com.mkso4ka.mindustry.matrixproc;
 
 import arc.Core;
 import arc.files.Fi;
+import arc.math.geom.Point2;
 import arc.scene.ui.*;
 import arc.scene.ui.layout.Cell;
 import arc.scene.ui.layout.Table;
@@ -150,13 +151,17 @@ public class ModUI {
         double tolerance = toleranceSlider.getValue();
         int maxInstructions = (int) instructionsSlider.getValue();
         
+        // ИСПРАВЛЕНИЕ: Используем вашу правильную логику для расчета
         DisplayMatrix displayMatrix = new DisplayMatrix();
         MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, DisplayProcessorMatrixFinal.PROCESSOR_REACH);
         DisplayProcessorMatrixFinal tempMatrix = new DisplayProcessorMatrixFinal(blueprint.n, blueprint.m, new int[displaysX*displaysY], blueprint.displayBottomLefts, displaySize);
+        
         int availableSlots = 0;
-        for(DisplayProcessorMatrixFinal.Cell[] row : tempMatrix.getMatrix()){
-            for(DisplayProcessorMatrixFinal.Cell cell : row){
-                if(cell.type == 0 && tempMatrix.isWithinProcessorReachOfAnyDisplay(new arc.math.geom.Point2(cell.x, cell.y))) availableSlots++;
+        for (int y = 0; y < blueprint.n; y++) {
+            for (int x = 0; x < blueprint.m; x++) {
+                if (tempMatrix.getMatrix()[y][x].type == 0 && tempMatrix.isWithinProcessorReachOfAnyDisplay(new Point2(x, y))) {
+                    availableSlots++;
+                }
             }
         }
         availableProcessorsLabel.setText("Максимум доступно процессоров: [accent]" + availableSlots + "[]");

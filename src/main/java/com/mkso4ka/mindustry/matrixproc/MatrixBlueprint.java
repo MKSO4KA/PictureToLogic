@@ -1,16 +1,17 @@
 package com.mkso4ka.mindustry.matrixproc;
 
-// Используем DPoint из библиотеки триангуляции
-import org.waveware.delaunator.DPoint;
+/**
+ * Хранит результат работы DisplayMatrix: размеры и координаты дисплеев.
+ */
+class MatrixBlueprint {
+    final int n;
+    final int m;
+    // Возвращаем ваш тип int[][]
+    final int[][] displayBottomLefts;
 
-public class MatrixBlueprint {
-    public final int n, m;
-    // Поле должно быть типа DPoint[]
-    public final DPoint[] displayBottomLefts;
-
-    public MatrixBlueprint(int n, int m, DPoint[] displayBottomLefts) {
+    MatrixBlueprint(int n, int m, int[][] coordinates) {
         this.n = n;
         this.m = m;
-        this.displayBottomLefts = displayBottomLefts;
+        this.displayBottomLefts = coordinates;
     }
 }
