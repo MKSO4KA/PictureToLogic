@@ -1,6 +1,7 @@
 package com.mkso4ka.mindustry.matrixproc;
 
-import com.mkso4ka.mindustry.matrixproc.Point;
+// Импорт больше не нужен здесь, так как мы используем Point из того же пакета
+// import com.mkso4ka.mindustry.matrixproc.Point;
 
 public class DisplayProcessorMatrixFinal {
     final int n, m;
@@ -9,7 +10,7 @@ public class DisplayProcessorMatrixFinal {
     final int displaySize;
     private final Cell[][] matrix;
     
-    // --- ИСПРАВЛЕНИЕ: Возвращаем правильный радиус ---
+    // Возвращаем правильный радиус
     public static final int PROCESSOR_REACH = 10;
 
     public DisplayProcessorMatrixFinal(int n, int m, int[] processorsPerDisplay, Point[] displays, int displaySize) {
@@ -76,8 +77,10 @@ public class DisplayProcessorMatrixFinal {
 
     public static int calculateMaxAvailableProcessors(int n, int m, int displaySize) {
         DisplayMatrix displayMatrix = new DisplayMatrix();
+        // Используем ту же логику, что и основной код, с правильным радиусом
         MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(n, m, displaySize, PROCESSOR_REACH);
 
+        // Создаем виртуальную матрицу
         Cell[][] matrix = new Cell[blueprint.m][blueprint.n];
         for (int i = 0; i < blueprint.m; i++) {
             for (int j = 0; j < blueprint.n; j++) {
@@ -85,18 +88,19 @@ public class DisplayProcessorMatrixFinal {
             }
         }
 
+        // Размещаем на ней дисплеи
         for (int i = 0; i < blueprint.displayBottomLefts.length; i++) {
             Point p = blueprint.displayBottomLefts[i];
             for (int row = p.y; row < p.y + displaySize; row++) {
                 for (int col = p.x; col < p.x + displaySize; col++) {
                     if (row < blueprint.m && col < blueprint.n) {
-                        matrix[row][col].type = 2;
-                        matrix[row][col].ownerId = i;
+                        matrix[row][col].type = 2; // Помечаем как дисплей
                     }
                 }
             }
         }
 
+        // Считаем все пустые ячейки (type == 0)
         int availableSlots = 0;
         for (int i = 0; i < blueprint.m; i++) {
             for (int j = 0; j < blueprint.n; j++) {
