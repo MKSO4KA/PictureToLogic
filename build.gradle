@@ -48,6 +48,10 @@ processResources {
 jar {
     archiveBaseName = project.name + "-Desktop"
 
+    // Эта строка добавляет в JAR скомпилированные классы вашего мода и ресурсы (включая mod.hjson)
+    from sourceSets.main.output
+
+    // Этот блок, как и раньше, добавляет зависимости
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
