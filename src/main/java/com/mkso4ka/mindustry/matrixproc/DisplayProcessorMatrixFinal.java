@@ -1,19 +1,16 @@
 package com.mkso4ka.mindustry.matrixproc;
 
-// Используем DPoint из библиотеки триангуляции
 import org.waveware.delaunator.DPoint;
 
 public class DisplayProcessorMatrixFinal {
     final int n, m;
     final int[] processorsPerDisplay;
-    // Поле должно быть типа DPoint[]
     final DPoint[] displays;
     final int displaySize;
     private final Cell[][] matrix;
     
     public static final int PROCESSOR_REACH = 10;
 
-    // Конструктор принимает DPoint[]
     public DisplayProcessorMatrixFinal(int n, int m, int[] processorsPerDisplay, DPoint[] displays, int displaySize) {
         this.n = n;
         this.m = m;
@@ -27,7 +24,6 @@ public class DisplayProcessorMatrixFinal {
             }
         }
         for (int i = 0; i < displays.length; i++) {
-            // p теперь типа DPoint, используем каст к int
             DPoint p = displays[i];
             for (int row = (int)p.y; row < (int)p.y + displaySize; row++) {
                 for (int col = (int)p.x; col < (int)p.x + displaySize; col++) {
@@ -45,7 +41,6 @@ public class DisplayProcessorMatrixFinal {
             int processorsToPlace = processorsPerDisplay[i];
             DPoint displayPos = displays[i];
             int placed = 0;
-            // Используем каст к int для координат DPoint
             int dispX = (int)displayPos.x;
             int dispY = (int)displayPos.y;
             for (int r = 1; r <= PROCESSOR_REACH && placed < processorsToPlace; r++) {
@@ -72,7 +67,6 @@ public class DisplayProcessorMatrixFinal {
     }
 
     public Cell[][] getMatrix() { return matrix; }
-    // Метод возвращает DPoint[]
     public DPoint[] getDisplays() { return displays; }
 
     public static class Cell {

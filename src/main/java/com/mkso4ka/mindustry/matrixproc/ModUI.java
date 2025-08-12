@@ -25,7 +25,6 @@ public class ModUI {
     private static Table previewTable;
     private static Label availableProcessorsLabel, requiredProcessorsLabel, statusLabel;
     
-    // Токен для отмены фоновой задачи
     private static final AtomicBoolean cancellationToken = new AtomicBoolean(false);
 
     public static void build() {
@@ -39,7 +38,6 @@ public class ModUI {
     }
 
     private static void showSettingsDialog() {
-        // ... (весь код showSettingsDialog остается таким же, как в предыдущем ответе)
         BaseDialog dialog = new BaseDialog("Настройки PictureToLogic");
         dialog.addCloseButton();
         Table content = dialog.cont;
@@ -169,7 +167,6 @@ public class ModUI {
     }
 
     private static void generateAndShowSchematic(Fi imageFile) {
-        // --- НОВЫЙ UX: ДИАЛОГ ОБРАБОТКИ С ОТМЕНОЙ ---
         BaseDialog progressDialog = new BaseDialog("Обработка");
         progressDialog.cont.add("Идет обработка изображения...").pad(20).row();
         progressDialog.buttons.button("Отмена", Icon.cancel, () -> {
@@ -178,7 +175,6 @@ public class ModUI {
         }).size(200, 50);
         progressDialog.show();
 
-        // Сбрасываем токен перед запуском
         cancellationToken.set(false);
 
         new Thread(() -> {
@@ -201,11 +197,10 @@ public class ModUI {
                 Core.app.post(() -> {
                     if (cancellationToken.get()) {
                         WebLogger.info("Processing was cancelled by the user. No schematic will be shown.");
-                        return; // Выходим, если была отмена
+                        return;
                     }
 
                     if (finalResult != null && finalResult.schematic != null) {
-                        // --- НОВЫЙ UX: ДИАЛОГ ПОДТВЕРЖДЕНИЯ ---
                         showConfirmationDialog(finalResult);
                     } else {
                         Vars.ui.showInfo("[red]Не удалось создать чертеж.[]\nПроверьте логи для получения подробной информации.");
