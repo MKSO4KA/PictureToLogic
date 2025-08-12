@@ -37,20 +37,19 @@ public class ImageProcessor {
         this.width = pixmap.getWidth();
         this.height = pixmap.getHeight();
     }
-
-    // --- ГЛАВНЫЙ ИЗМЕНЕННЫЙ МЕТОД ---
+    
     public ProcessingSteps process(double tolerance, int diffusionIterations, float diffusionContrast, int displayId) {
         int maxPoints = (int)(5000 - tolerance * 1500);
 
-        // --- ЭТАП 1: Обнаружение краев (Sobel) ---
+        // ЭТАП 1: Обнаружение краев (Sobel)
         float[][] edgeMap = sobelEdgeDetect(originalPixmap);
         logEdgeMap(edgeMap, displayId);
 
-        // --- ЭТАП 2: Расстановка точек ---
+        // ЭТАП 2: Расстановка точек
         List<DPoint> points = placePoints(edgeMap, maxPoints);
         logPlacedPoints(points, displayId);
 
-        // --- ЭТАП 3: Триангуляция и раскраска ---
+        // ЭТАП 3: Триангуляция и раскраска
         Delaunator delaunator = new Delaunator(points);
         Map<Integer, List<Triangle>> trianglesByColor = colorTriangles(delaunator, points);
         logFinalTriangulation(trianglesByColor, displayId);
@@ -74,23 +73,29 @@ public class ImageProcessor {
 
     private void logPlacedPoints(List<DPoint> points, int displayId) {
         Pixmap pointsPixmap = originalPixmap.copy();
-        pointsPixmap.setColor(Color.green);
+        
+        // ИСПРАВЛЕНИЕ: Устанавливаем цвет как int и рисуем маленький квадрат вместо круга
+        pointsPixmap.setColor(Color.green.rgba());
         for (DPoint p : points) {
-            // Рисуем точку 3x3 для лучшей видимости
-            pointsPixmap.fillCircle((int) p.x, (int) p.y, 1);
+            pointsPixmap.fillRectangle((int) p.x, (int) p.y, 2, 2);
         }
+        
         WebLogger.logImage(String.format("slice_%d_2_PlacedPoints", displayId), pointsPixmap);
         pointsPixmap.dispose();
     }
     
     private void logFinalTriangulation(Map<Integer, List<Triangle>> trianglesByColor, int displayId) {
         Pixmap finalTrianglesPixmap = new Pixmap(width, height);
-        // Отключаем смешивание, чтобы цвета точно соответствовали
-        finalTrianglesPixmap.setBlending(Pixmap.Blending.None);
+        
+        // ИСПРАВЛЕНИЕ: Используем 'none' в нижнем регистре
+        finalTrianglesPixmap.setBlending(Pixmap.Blending.none);
         
         for (Map.Entry<Integer, List<Triangle>> entry : trianglesByColor.entrySet()) {
+            // ИСПРАВЛЕНИЕ: Установка цвета как int (что entry.getKey() и делает)
             finalTrianglesPixmap.setColor(entry.getKey());
+            
             for (Triangle t : entry.getValue()) {
+                // ИСПРАВЛЕНИЕ: Этот вызов теперь корректен, т.к. цвет установлен правильно
                 finalTrianglesPixmap.fillTriangle(t.x1, t.y1, t.x2, t.y2, t.x3, t.y3);
             }
         }
@@ -176,7 +181,7 @@ public class ImageProcessor {
 
             int color = originalPixmap.get(centerX, centerY);
             
-            if ((color & 0xff) > 10) { // Проверка альфа-канала
+            if ((color & 0xff) > 10) { 
                 Triangle t = new Triangle((int)p1.x, (int)p1.y, (int)p2.x, (int)p2.y, (int)p3.x, (int)p3.y);
                 trianglesByColor.computeIfAbsent(color, k -> new ArrayList<>()).add(t);
             }
