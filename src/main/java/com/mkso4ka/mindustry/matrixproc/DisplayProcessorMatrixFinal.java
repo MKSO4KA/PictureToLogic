@@ -1,17 +1,17 @@
 package com.mkso4ka.mindustry.matrixproc;
 
-// Добавлен необходимый импорт
-import com.mkso4ka.mindustry.matrixproc.Point;
+// ИСПРАВЛЕНИЕ: Импортируем DPoint
+import org.waveware.delaunator.DPoint;
 
 public class DisplayProcessorMatrixFinal {
     final int n, m;
     final int[] processorsPerDisplay;
-    final Point[] displays;
+    final DPoint[] displays; // ИСПРАВЛЕНО: Тип изменен на DPoint[]
     final int displaySize;
     private final Cell[][] matrix;
     public static final int PROCESSOR_REACH = 8;
 
-    public DisplayProcessorMatrixFinal(int n, int m, int[] processorsPerDisplay, Point[] displays, int displaySize) {
+    public DisplayProcessorMatrixFinal(int n, int m, int[] processorsPerDisplay, DPoint[] displays, int displaySize) { // ИСПРАВЛЕНО
         this.n = n;
         this.m = m;
         this.processorsPerDisplay = processorsPerDisplay;
@@ -24,9 +24,9 @@ public class DisplayProcessorMatrixFinal {
             }
         }
         for (int i = 0; i < displays.length; i++) {
-            Point p = displays[i];
-            for (int row = p.y; row < p.y + displaySize; row++) {
-                for (int col = p.x; col < p.x + displaySize; col++) {
+            DPoint p = displays[i]; // ИСПРАВЛЕНО
+            for (int row = (int)p.y; row < (int)p.y + displaySize; row++) { // ИСПРАВЛЕНО: Приведение к int
+                for (int col = (int)p.x; col < (int)p.x + displaySize; col++) { // ИСПРАВЛЕНО: Приведение к int
                     if (row < m && col < n) {
                         matrix[row][col].type = 2;
                         matrix[row][col].ownerId = i;
@@ -39,16 +39,16 @@ public class DisplayProcessorMatrixFinal {
     public void placeProcessors() {
         for (int i = 0; i < displays.length; i++) {
             int processorsToPlace = processorsPerDisplay[i];
-            Point displayPos = displays[i];
+            DPoint displayPos = displays[i]; // ИСПРАВЛЕНО
             int placed = 0;
             for (int r = 1; r <= PROCESSOR_REACH && placed < processorsToPlace; r++) {
-                for (int j = displayPos.x - r; j <= displayPos.x + displaySize - 1 + r && placed < processorsToPlace; j++) {
-                    placed += tryPlaceProcessor(j, displayPos.y - r, i, placed, processorsToPlace);
-                    placed += tryPlaceProcessor(j, displayPos.y + displaySize - 1 + r, i, placed, processorsToPlace);
+                for (int j = (int)displayPos.x - r; j <= (int)displayPos.x + displaySize - 1 + r && placed < processorsToPlace; j++) { // ИСПРАВЛЕНО
+                    placed += tryPlaceProcessor(j, (int)displayPos.y - r, i, placed, processorsToPlace);
+                    placed += tryPlaceProcessor(j, (int)displayPos.y + displaySize - 1 + r, i, placed, processorsToPlace);
                 }
-                for (int j = displayPos.y - r + 1; j <= displayPos.y + displaySize - 1 + r - 1 && placed < processorsToPlace; j++) {
-                    placed += tryPlaceProcessor(displayPos.x - r, j, i, placed, processorsToPlace);
-                    placed += tryPlaceProcessor(displayPos.x + displaySize - 1 + r, j, i, placed, processorsToPlace);
+                for (int j = (int)displayPos.y - r + 1; j <= (int)displayPos.y + displaySize - 1 + r - 1 && placed < processorsToPlace; j++) { // ИСПРАВЛЕНО
+                    placed += tryPlaceProcessor((int)displayPos.x - r, j, i, placed, processorsToPlace);
+                    placed += tryPlaceProcessor((int)displayPos.x + displaySize - 1 + r, j, i, placed, processorsToPlace);
                 }
             }
         }
@@ -65,27 +65,18 @@ public class DisplayProcessorMatrixFinal {
     }
 
     public Cell[][] getMatrix() { return matrix; }
-    public Point[] getDisplays() { return displays; }
+    public DPoint[] getDisplays() { return displays; } // ИСПРАВЛЕНО
 
     public static class Cell {
-        public int type = 0; // 0 - empty, 1 - processor, 2 - display
+        public int type = 0;
         public int ownerId = -1;
         public int processorIndex = -1;
     }
 
-    /**
-     * Статический метод для предварительного расчета максимального количества процессоров,
-     * которые можно разместить на схеме с заданной конфигурацией.
-     * @param n Количество дисплеев по горизонтали (X)
-     * @param m Количество дисплеев по вертикали (Y)
-     * @param displaySize Размер дисплея в тайлах (3 или 6)
-     * @return Максимальное количество доступных слотов для процессоров.
-     */
     public static int calculateMaxAvailableProcessors(int n, int m, int displaySize) {
         DisplayMatrix displayMatrix = new DisplayMatrix();
         MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(n, m, displaySize, PROCESSOR_REACH);
 
-        // Исправлено: Используем blueprint.m и blueprint.n
         Cell[][] matrix = new Cell[blueprint.m][blueprint.n];
         for (int i = 0; i < blueprint.m; i++) {
             for (int j = 0; j < blueprint.n; j++) {
@@ -94,9 +85,9 @@ public class DisplayProcessorMatrixFinal {
         }
 
         for (int i = 0; i < blueprint.displayBottomLefts.length; i++) {
-            Point p = blueprint.displayBottomLefts[i];
-            for (int row = p.y; row < p.y + displaySize; row++) {
-                for (int col = p.x; col < p.x + displaySize; col++) {
+            DPoint p = blueprint.displayBottomLefts[i]; // ИСПРАВЛЕНО
+            for (int row = (int)p.y; row < (int)p.y + displaySize; row++) { // ИСПРАВЛЕНО
+                for (int col = (int)p.x; col < (int)p.x + displaySize; col++) { // ИСПРАВЛЕНО
                     if (row < blueprint.m && col < blueprint.n) {
                         matrix[row][col].type = 2;
                         matrix[row][col].ownerId = i;

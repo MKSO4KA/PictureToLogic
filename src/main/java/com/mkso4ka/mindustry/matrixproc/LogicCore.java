@@ -2,7 +2,6 @@ package com.mkso4ka.mindustry.matrixproc;
 
 import arc.files.Fi;
 import arc.graphics.Pixmap;
-// Добавлены необходимые импорты
 import arc.struct.Seq;
 import arc.struct.StringMap;
 import mindustry.content.Blocks;
@@ -13,6 +12,7 @@ import mindustry.world.Tile;
 import mindustry.world.blocks.logic.LogicBlock;
 import mindustry.world.blocks.logic.LogicBlock.LogicLink;
 import mindustry.world.blocks.logic.LogicDisplay;
+import org.waveware.delaunator.DPoint; // ИСПРАВЛЕНИЕ: Импортируем DPoint
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,10 +21,9 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class LogicCore {
-
+    // ... (код до buildSchematic остается без изменений)
     private static final int BORDER_SIZE = 8;
 
-    // Внутренний класс для хранения результата обработки одного слайса
     private static class SliceProcessingResult {
         final int displayIndex;
         final List<String> processorCodes;
@@ -35,9 +34,7 @@ public class LogicCore {
     }
 
     public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, double detail, int maxInstructions, boolean useTransparentBg, final AtomicBoolean cancellationToken) {
-        
         ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
-        
         try {
             WebLogger.clearDebugImages();
             WebLogger.clearProcessorCodeLogs();
@@ -63,11 +60,9 @@ public class LogicCore {
                         WebLogger.warn("Processing cancelled by user before starting all tasks.");
                         return null;
                     }
-
                     final int displayIndex = j * displaysY + i;
                     final int currentI = i;
                     final int currentJ = j;
-
                     Callable<SliceProcessingResult> task = () -> {
                         int displayStartX = currentJ * displayPixelSize;
                         int displayStartY = currentI * displayPixelSize;
@@ -77,12 +72,10 @@ public class LogicCore {
                         int sliceEndY = Math.min(totalDisplayHeight, displayStartY + displayPixelSize + BORDER_SIZE);
                         int sliceWidth = sliceEndX - sliceStartX;
                         int sliceHeight = sliceEndY - sliceStartY;
-
                         Pixmap finalSlice = new Pixmap(sliceWidth, sliceHeight);
                         synchronized (scaledMasterPixmap) {
                             finalSlice.draw(scaledMasterPixmap, sliceStartX, sliceStartY, sliceWidth, sliceHeight, 0, 0, sliceWidth, sliceHeight);
                         }
-
                         if (useTransparentBg) {
                             int bgColor = finalSlice.get(0, 0);
                             for (int y = 0; y < finalSlice.getHeight(); y++) {
@@ -91,14 +84,11 @@ public class LogicCore {
                                 }
                             }
                         }
-
                         ImageProcessor imageProc = new ImageProcessor(finalSlice);
                         ImageProcessor.ProcessingSteps steps = imageProc.process(detail, displayIndex);
                         finalSlice.dispose();
-
                         List<String> allCommands = generateTriangleCommandList(steps.result, displayPixelSize, sliceStartX, sliceStartY, displayStartX, displayStartY);
                         List<String> finalProcessorCodes = splitCommandsIntoChunks(allCommands, maxInstructions);
-                        
                         return new SliceProcessingResult(displayIndex, finalProcessorCodes);
                     };
                     futures.add(executor.submit(task));
@@ -171,8 +161,7 @@ public class LogicCore {
         return finalProcessorCodes;
     }
 
-    private Schematic buildSchematic(DisplayProcessorMatrixFinal.Cell[][] matrix, DisplayInfo[] displays, Map<Integer, List<String>> codeMap, Block displayBlock) {
-        // Исправлено: Возвращаем правильное создание Seq
+    private Schematic buildSchematic(DisplayProcessorMatrixFinal.Cell[][] matrix, DPoint[] displays, Map<Integer, List<String>> codeMap, Block displayBlock) { // ИСПРАВЛЕНО
         Seq<Stile> tiles = new Seq<>();
         int height = matrix.length;
         int width = matrix[0].length;
@@ -184,7 +173,7 @@ public class LogicCore {
                 if (cell.type == 1 && cell.ownerId >= 0 && cell.processorIndex >= 0) {
                     short schemX = (short)col;
                     short schemY = (short)row;
-                    DisplayInfo ownerDisplay = displays[cell.ownerId];
+                    DPoint ownerDisplay = displays[cell.ownerId]; // ИСПРАВЛЕНО
                     
                     String code = "### ERROR: Code not found ###";
                     List<String> codesForDisplay = codeMap.get(cell.ownerId);
@@ -198,10 +187,10 @@ public class LogicCore {
                     LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
                     build.tile = new Tile(schemX, schemY);
 
-                    int displayMinX = ownerDisplay.bottomLeft.x;
-                    int displayMinY = ownerDisplay.bottomLeft.y;
-                    int displayMaxX = ownerDisplay.bottomLeft.x + displayBlock.size - 1;
-                    int displayMaxY = ownerDisplay.bottomLeft.y + displayBlock.size - 1;
+                    int displayMinX = (int)ownerDisplay.x; // ИСПРАВЛЕНО
+                    int displayMinY = (int)ownerDisplay.y; // ИСПРАВЛЕНО
+                    int displayMaxX = (int)ownerDisplay.x + displayBlock.size - 1; // ИСПРАВЛЕНО
+                    int displayMaxY = (int)ownerDisplay.y + displayBlock.size - 1; // ИСПРАВЛЕНО
                     int linkToX = Math.max(displayMinX, Math.min(schemX, displayMaxX));
                     int linkToY = Math.max(displayMinY, Math.min(schemY, displayMaxY));
                     build.links.add(new LogicLink(linkToX, linkToY, "display1", true));
@@ -213,9 +202,9 @@ public class LogicCore {
             }
         }
 
-        for (DisplayInfo display : displays) {
-            short finalX = (short)display.bottomLeft.x;
-            short finalY = (short)display.bottomLeft.y;
+        for (DPoint display : displays) { // ИСПРАВЛЕНО
+            short finalX = (short)display.x; // ИСПРАВЛЕНО
+            short finalY = (short)display.y; // ИСПРАВЛЕНО
             if (displayBlock.size == 6) { finalX += 2; finalY += 2; }
             else if (displayBlock.size == 3) { finalX += 1; finalY += 1; }
             tiles.add(new Stile(displayBlock, finalX, finalY, null, (byte) 0));
@@ -223,7 +212,6 @@ public class LogicCore {
         
         WebLogger.info("[Schematic Stats] Total objects placed: %d (%d displays, %d processors)", displays.length + processorCount, displays.length, processorCount);
 
-        // Исправлено: Возвращаем правильное создание Schematic
         StringMap tags = new StringMap();
         tags.put("name", "PictureToLogic-Schematic");
         return new Schematic(tiles, tags, width, height);
