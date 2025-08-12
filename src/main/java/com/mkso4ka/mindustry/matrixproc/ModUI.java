@@ -59,11 +59,10 @@ public class ModUI {
         // --- КАЧЕСТВО ИЗОБРАЖЕНИЯ ---
         leftPanel.add("[accent]2. Настройки качества[]").colspan(3).padTop(15).row();
 
-        // Переименовываем "Допуск цвета" в "Детализацию" - это интуитивнее
         toleranceSlider = WebLogger.logChange(new Slider(0.1f, 3, 0.1f, false), "Detail Level");
-        toleranceSlider.setValue(1.5f);
-        toleranceLabel = new Label("1.5");
-        leftPanel.add("Детализация (больше = больше точек):");
+        toleranceSlider.setValue(1.0f); // Значение по умолчанию теперь 1.0
+        toleranceLabel = new Label("1.0");
+        leftPanel.add("Детализация (меньше = крупнее треугольники):"); // Новое, более честное описание
         leftPanel.add(toleranceSlider).width(200f).pad(5);
         leftPanel.add(toleranceLabel).row();
 
@@ -159,12 +158,11 @@ public class ModUI {
             try {
                 int displaysX = (int) xSlider.getValue();
                 int displaysY = (int) ySlider.getValue();
-                double detail = toleranceSlider.getValue(); // Теперь это "детализация"
+                double detail = toleranceSlider.getValue();
                 int maxInstructions = (int)instructionsSlider.getValue();
                 boolean useTransparentBg = transparentBgCheck.isChecked();
 
                 LogicCore logic = new LogicCore();
-                // --- ИСПРАВЛЕНИЕ: Убираем лишние параметры из вызова ---
                 result = logic.processImage(imageFile, displaysX, displaysY, selectedDisplay, detail, maxInstructions, useTransparentBg);
             } catch (Exception e) {
                 WebLogger.err("Критическая ошибка при создании чертежа!", e);

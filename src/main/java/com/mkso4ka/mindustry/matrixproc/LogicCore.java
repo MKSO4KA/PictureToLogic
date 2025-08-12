@@ -31,11 +31,14 @@ public class LogicCore {
 
             int displaySize = displayBlock.size;
             int displayPixelSize = getDisplayPixelSize(displaySize);
-            int totalWidth = (displaysX * displayPixelSize) + (Math.max(0, displaysX - 1) * BORDER_SIZE * 2);
-            int totalHeight = (displaysY * displayPixelSize) + (Math.max(0, displaysY - 1) * BORDER_SIZE * 2);
+            
+            // Общие размеры изображения, которые будут занимать все дисплеи
+            int totalDisplayWidth = displaysX * displayPixelSize;
+            int totalDisplayHeight = displaysY * displayPixelSize;
 
-            Pixmap scaledMasterPixmap = new Pixmap(totalWidth, totalHeight);
-            scaledMasterPixmap.draw(masterPixmap, 0, 0, masterPixmap.width, masterPixmap.height, 0, 0, totalWidth, totalHeight);
+            // Масштабируем исходное изображение до суммарного размера всех дисплеев
+            Pixmap scaledMasterPixmap = new Pixmap(totalDisplayWidth, totalDisplayHeight);
+            scaledMasterPixmap.draw(masterPixmap, 0, 0, masterPixmap.width, masterPixmap.height, 0, 0, totalDisplayWidth, totalDisplayHeight);
             masterPixmap.dispose();
 
             DisplayMatrix displayMatrix = new DisplayMatrix();
@@ -50,12 +53,21 @@ public class LogicCore {
                 for (int j = 0; j < displaysX; j++) {
                     int displayIndex = j * displaysY + i;
                     
-                    int sliceWidth = displayPixelSize + (j > 0 ? BORDER_SIZE : 0) + (j < displaysX - 1 ? BORDER_SIZE : 0);
-                    int sliceHeight = displayPixelSize + (i > 0 ? BORDER_SIZE : 0) + (i < displaysY - 1 ? BORDER_SIZE : 0);
-                    int subX = j * (displayPixelSize + BORDER_SIZE * 2) - (j > 0 ? BORDER_SIZE : 0);
-                    int subY = i * (displayPixelSize + BORDER_SIZE * 2) - (i > 0 ? BORDER_SIZE : 0);
+                    // Определяем область, которую покрывает ОДИН дисплей в глобальных координатах
+                    int displayStartX = j * displayPixelSize;
+                    int displayStartY = i * displayPixelSize;
+
+                    // Создаем слайс с границами (нахлестом) для бесшовной триангуляции
+                    int sliceStartX = Math.max(0, displayStartX - BORDER_SIZE);
+                    int sliceStartY = Math.max(0, displayStartY - BORDER_SIZE);
+                    int sliceEndX = Math.min(totalDisplayWidth, displayStartX + displayPixelSize + BORDER_SIZE);
+                    int sliceEndY = Math.min(totalDisplayHeight, displayStartY + displayPixelSize + BORDER_SIZE);
+
+                    int sliceWidth = sliceEndX - sliceStartX;
+                    int sliceHeight = sliceEndY - sliceStartY;
+
                     Pixmap finalSlice = new Pixmap(sliceWidth, sliceHeight);
-                    finalSlice.draw(scaledMasterPixmap, subX, subY, sliceWidth, sliceHeight, 0, 0, sliceWidth, sliceHeight);
+                    finalSlice.draw(scaledMasterPixmap, sliceStartX, sliceStartY, sliceWidth, sliceHeight, 0, 0, sliceWidth, sliceHeight);
                     
                     if (useTransparentBg) {
                         int bgColor = finalSlice.get(0, 0);
@@ -71,45 +83,39 @@ public class LogicCore {
                     ImageProcessor processor = new ImageProcessor(finalSlice);
                     ImageProcessor.ProcessingSteps steps = processor.process(detail, displayIndex);
                     
-                    int offsetX = (j > 0) ? BORDER_SIZE : 0;
-                    int offsetY = (i > 0) ? BORDER_SIZE : 0;
-                    List<String> allCommands = generateTriangleCommandList(steps.result, displayPixelSize, offsetX, offsetY);
+                    // Передаем в генератор команд глобальные координаты начала слайса и дисплея
+                    List<String> allCommands = generateTriangleCommandList(
+                        steps.result, 
+                        displayPixelSize, 
+                        sliceStartX, 
+                        sliceStartY, 
+                        displayStartX, 
+                        displayStartY
+                    );
                     
                     StringBuilder fullCodeBuilder = new StringBuilder();
                     allCommands.forEach(cmd -> fullCodeBuilder.append(cmd).append("\n"));
                     finalCodesForApi.add(new DisplayCodeInfo(displayIndex, fullCodeBuilder.toString(), displayPixelSize));
 
-                    // --- НАЧАЛО ИСПРАВЛЕННОГО БЛОКА ---
-
-                    // Резервируем одну строку для команды drawflush
                     int safeMaxInstructions = maxInstructions - 1;
                     if (safeMaxInstructions < 1) safeMaxInstructions = 1;
 
                     List<String> finalProcessorCodes = new ArrayList<>();
                     if (!allCommands.isEmpty()) {
                         List<String> currentChunkContent = new ArrayList<>();
-
                         for (String command : allCommands) {
-                            // Если добавление новой команды превысит лимит,
-                            // завершаем текущий кусок кода и начинаем новый.
                             if (currentChunkContent.size() >= safeMaxInstructions) {
                                 currentChunkContent.add("drawflush display1");
                                 finalProcessorCodes.add(String.join("\n", currentChunkContent));
                                 currentChunkContent.clear();
                             }
-                            
-                            // Просто добавляем команду в текущий кусок.
                             currentChunkContent.add(command);
                         }
-
-                        // После цикла не забываем сохранить последний оставшийся кусок кода.
                         if (!currentChunkContent.isEmpty()) {
                             currentChunkContent.add("drawflush display1");
                             finalProcessorCodes.add(String.join("\n", currentChunkContent));
                         }
                     }
-
-                    // --- КОНЕЦ ИСПРАВЛЕННОГО БЛОКА ---
                     
                     codeMap.put(displayIndex, finalProcessorCodes);
                     processorsPerDisplay[displayIndex] = finalProcessorCodes.size();
@@ -186,19 +192,47 @@ public class LogicCore {
         return new Schematic(tiles, tags, width, height);
     }
 
-    private List<String> generateTriangleCommandList(Map<Integer, List<ImageProcessor.Triangle>> triangles, int displayPixelSize, int offsetX, int offsetY) {
+    private List<String> generateTriangleCommandList(
+        Map<Integer, List<ImageProcessor.Triangle>> triangles, 
+        int displayPixelSize, 
+        int sliceStartX, 
+        int sliceStartY, 
+        int displayStartX, 
+        int displayStartY
+    ) {
         List<String> commands = new ArrayList<>();
+        int maxCoord = displayPixelSize - 1;
+
         for (Map.Entry<Integer, List<ImageProcessor.Triangle>> entry : triangles.entrySet()) {
             List<ImageProcessor.Triangle> triangleList = entry.getValue();
             if (!triangleList.isEmpty()) {
                 commands.add(formatColorCommand(entry.getKey()));
                 for (ImageProcessor.Triangle t : triangleList) {
-                    int x1 = t.x1 - offsetX;
-                    int y1 = displayPixelSize - 1 - (t.y1 - offsetY);
-                    int x2 = t.x2 - offsetX;
-                    int y2 = displayPixelSize - 1 - (t.y2 - offsetY);
-                    int x3 = t.x3 - offsetX;
-                    int y3 = displayPixelSize - 1 - (t.y3 - offsetY);
+                    // 1. Получаем "глобальную" координату точки на большом отмасштабированном изображении
+                    int globalX1 = sliceStartX + t.x1;
+                    int globalY1 = sliceStartY + t.y1;
+                    int globalX2 = sliceStartX + t.x2;
+                    int globalY2 = sliceStartY + t.y2;
+                    int globalX3 = sliceStartX + t.x3;
+                    int globalY3 = sliceStartY + t.y3;
+
+                    // 2. Преобразуем "глобальную" координату в "локальную" для текущего дисплея
+                    int localX1 = globalX1 - displayStartX;
+                    int localY1 = globalY1 - displayStartY;
+                    int localX2 = globalX2 - displayStartX;
+                    int localY2 = globalY2 - displayStartY;
+                    int localX3 = globalX3 - displayStartX;
+                    int localY3 = globalY3 - displayStartY;
+
+                    // 3. Инвертируем ось Y для Mindustry и ОГРАНИЧИВАЕМ результат
+                    // Ограничение все еще нужно, т.к. точки из нахлеста могут выйти за [0, maxCoord]
+                    int x1 = Math.max(0, Math.min(maxCoord, localX1));
+                    int y1 = maxCoord - Math.max(0, Math.min(maxCoord, localY1));
+                    int x2 = Math.max(0, Math.min(maxCoord, localX2));
+                    int y2 = maxCoord - Math.max(0, Math.min(maxCoord, localY2));
+                    int x3 = Math.max(0, Math.min(maxCoord, localX3));
+                    int y3 = maxCoord - Math.max(0, Math.min(maxCoord, localY3));
+
                     commands.add(String.format("draw triangle %d %d %d %d %d %d 0 0", x1, y1, x2, y2, x3, y3));
                 }
             }
