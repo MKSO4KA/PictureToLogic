@@ -12,6 +12,7 @@ import mindustry.world.Tile;
 import mindustry.world.blocks.logic.LogicBlock;
 import mindustry.world.blocks.logic.LogicBlock.LogicLink;
 import mindustry.world.blocks.logic.LogicDisplay;
+import org.waveware.delaunator.DPoint; // ИСПРАВЛЕНИЕ: Импортируем DPoint
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,7 +21,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class LogicCore {
-
+    // ... (код до buildSchematic остается без изменений)
     private static final int BORDER_SIZE = 8;
 
     private static class SliceProcessingResult {
@@ -32,7 +33,7 @@ public class LogicCore {
         }
     }
 
-    public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, double tolerance, int maxInstructions, int diffusionIterations, float diffusionContrast, boolean useTransparentBg, final AtomicBoolean cancellationToken) {
+    public ProcessingResult processImage(Fi imageFile, int displaysX, int displaysY, LogicDisplay displayBlock, double detail, int maxInstructions, boolean useTransparentBg, final AtomicBoolean cancellationToken) {
         ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
         try {
             WebLogger.clearDebugImages();
@@ -41,16 +42,15 @@ public class LogicCore {
             Pixmap masterPixmap = new Pixmap(imageFile);
             int displaySize = displayBlock.size;
             int displayPixelSize = getDisplayPixelSize(displaySize);
-            int totalWidth = (displaysX * displayPixelSize) + (Math.max(0, displaysX - 1) * BORDER_SIZE * 2);
-            int totalHeight = (displaysY * displayPixelSize) + (Math.max(0, displaysY - 1) * BORDER_SIZE * 2);
+            int totalDisplayWidth = displaysX * displayPixelSize;
+            int totalDisplayHeight = displaysY * displayPixelSize;
 
-            Pixmap scaledMasterPixmap = new Pixmap(totalWidth, totalHeight);
-            scaledMasterPixmap.draw(masterPixmap, 0, 0, masterPixmap.width, masterPixmap.height, 0, 0, totalWidth, totalHeight);
+            Pixmap scaledMasterPixmap = new Pixmap(totalDisplayWidth, totalDisplayHeight);
+            scaledMasterPixmap.draw(masterPixmap, 0, 0, masterPixmap.width, masterPixmap.height, 0, 0, totalDisplayWidth, totalDisplayHeight);
             masterPixmap.dispose();
 
             DisplayMatrix displayMatrix = new DisplayMatrix();
-            // ИСПРАВЛЕНИЕ: Передаем int в placeDisplaysXxY
-            MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, (int)DisplayProcessorMatrixFinal.PROCESSOR_REACH);
+            MatrixBlueprint blueprint = displayMatrix.placeDisplaysXxY(displaysX, displaysY, displaySize, DisplayProcessorMatrixFinal.PROCESSOR_REACH);
 
             List<Future<SliceProcessingResult>> futures = new ArrayList<>();
 
@@ -60,22 +60,22 @@ public class LogicCore {
                         WebLogger.warn("Processing cancelled by user before starting all tasks.");
                         return null;
                     }
-
                     final int displayIndex = j * displaysY + i;
                     final int currentI = i;
                     final int currentJ = j;
-
                     Callable<SliceProcessingResult> task = () -> {
-                        int sliceWidth = displayPixelSize + (currentJ > 0 ? BORDER_SIZE : 0) + (currentJ < displaysX - 1 ? BORDER_SIZE : 0);
-                        int sliceHeight = displayPixelSize + (currentI > 0 ? BORDER_SIZE : 0) + (currentI < displaysY - 1 ? BORDER_SIZE : 0);
-                        int subX = currentJ * (displayPixelSize + BORDER_SIZE * 2) - (currentJ > 0 ? BORDER_SIZE : 0);
-                        int subY = currentI * (displayPixelSize + BORDER_SIZE * 2) - (currentI > 0 ? BORDER_SIZE : 0);
-                        
+                        int displayStartX = currentJ * displayPixelSize;
+                        int displayStartY = currentI * displayPixelSize;
+                        int sliceStartX = Math.max(0, displayStartX - BORDER_SIZE);
+                        int sliceStartY = Math.max(0, displayStartY - BORDER_SIZE);
+                        int sliceEndX = Math.min(totalDisplayWidth, displayStartX + displayPixelSize + BORDER_SIZE);
+                        int sliceEndY = Math.min(totalDisplayHeight, displayStartY + displayPixelSize + BORDER_SIZE);
+                        int sliceWidth = sliceEndX - sliceStartX;
+                        int sliceHeight = sliceEndY - sliceStartY;
                         Pixmap finalSlice = new Pixmap(sliceWidth, sliceHeight);
                         synchronized (scaledMasterPixmap) {
-                            finalSlice.draw(scaledMasterPixmap, subX, subY, sliceWidth, sliceHeight, 0, 0, sliceWidth, sliceHeight);
+                            finalSlice.draw(scaledMasterPixmap, sliceStartX, sliceStartY, sliceWidth, sliceHeight, 0, 0, sliceWidth, sliceHeight);
                         }
-
                         if (useTransparentBg) {
                             int bgColor = finalSlice.get(0, 0);
                             for (int y = 0; y < finalSlice.getHeight(); y++) {
@@ -84,16 +84,11 @@ public class LogicCore {
                                 }
                             }
                         }
-
                         ImageProcessor imageProc = new ImageProcessor(finalSlice);
-                        ImageProcessor.ProcessingSteps steps = imageProc.process(tolerance, diffusionIterations, diffusionContrast);
+                        ImageProcessor.ProcessingSteps steps = imageProc.process(detail, displayIndex);
                         finalSlice.dispose();
-
-                        int offsetX = (currentJ > 0) ? BORDER_SIZE : 0;
-                        int offsetY = (currentI > 0) ? BORDER_SIZE : 0;
-                        List<String> allCommands = generateTriangleCommandList(steps.result, displayPixelSize, offsetX, offsetY);
+                        List<String> allCommands = generateTriangleCommandList(steps.result, displayPixelSize, sliceStartX, sliceStartY, displayStartX, displayStartY);
                         List<String> finalProcessorCodes = splitCommandsIntoChunks(allCommands, maxInstructions);
-                        
                         return new SliceProcessingResult(displayIndex, finalProcessorCodes);
                     };
                     futures.add(executor.submit(task));
@@ -166,7 +161,7 @@ public class LogicCore {
         return finalProcessorCodes;
     }
 
-    private Schematic buildSchematic(DisplayProcessorMatrixFinal.Cell[][] matrix, DisplayInfo[] displays, Map<Integer, List<String>> codeMap, Block displayBlock) {
+    private Schematic buildSchematic(DisplayProcessorMatrixFinal.Cell[][] matrix, DPoint[] displays, Map<Integer, List<String>> codeMap, Block displayBlock) { // ИСПРАВЛЕНО
         Seq<Stile> tiles = new Seq<>();
         int height = matrix.length;
         int width = matrix[0].length;
@@ -178,7 +173,7 @@ public class LogicCore {
                 if (cell.type == 1 && cell.ownerId >= 0 && cell.processorIndex >= 0) {
                     short schemX = (short)col;
                     short schemY = (short)row;
-                    DisplayInfo ownerDisplay = displays[cell.ownerId];
+                    DPoint ownerDisplay = displays[cell.ownerId]; // ИСПРАВЛЕНО
                     
                     String code = "### ERROR: Code not found ###";
                     List<String> codesForDisplay = codeMap.get(cell.ownerId);
@@ -191,15 +186,15 @@ public class LogicCore {
 
                     LogicBlock.LogicBuild build = (LogicBlock.LogicBuild) Blocks.microProcessor.newBuilding();
                     build.tile = new Tile(schemX, schemY);
-                    
-                    int displayMinX = ownerDisplay.bottomLeft.x;
-                    int displayMinY = ownerDisplay.bottomLeft.y;
-                    int displayMaxX = ownerDisplay.bottomLeft.x + displayBlock.size - 1;
-                    int displayMaxY = ownerDisplay.bottomLeft.y + displayBlock.size - 1;
+
+                    int displayMinX = (int)ownerDisplay.x; // ИСПРАВЛЕНО
+                    int displayMinY = (int)ownerDisplay.y; // ИСПРАВЛЕНО
+                    int displayMaxX = (int)ownerDisplay.x + displayBlock.size - 1; // ИСПРАВЛЕНО
+                    int displayMaxY = (int)ownerDisplay.y + displayBlock.size - 1; // ИСПРАВЛЕНО
                     int linkToX = Math.max(displayMinX, Math.min(schemX, displayMaxX));
                     int linkToY = Math.max(displayMinY, Math.min(schemY, displayMaxY));
-                    
                     build.links.add(new LogicLink(linkToX, linkToY, "display1", true));
+                    
                     build.updateCode(code);
                     tiles.add(new Stile(Blocks.microProcessor, schemX, schemY, build.config(), (byte) 0));
                     processorCount++;
@@ -207,9 +202,9 @@ public class LogicCore {
             }
         }
 
-        for (DisplayInfo display : displays) {
-            short finalX = (short)display.bottomLeft.x;
-            short finalY = (short)display.bottomLeft.y;
+        for (DPoint display : displays) { // ИСПРАВЛЕНО
+            short finalX = (short)display.x; // ИСПРАВЛЕНО
+            short finalY = (short)display.y; // ИСПРАВЛЕНО
             if (displayBlock.size == 6) { finalX += 2; finalY += 2; }
             else if (displayBlock.size == 3) { finalX += 1; finalY += 1; }
             tiles.add(new Stile(displayBlock, finalX, finalY, null, (byte) 0));
@@ -222,7 +217,7 @@ public class LogicCore {
         return new Schematic(tiles, tags, width, height);
     }
 
-    private List<String> generateTriangleCommandList(Map<Integer, List<ImageProcessor.Triangle>> triangles, int displayPixelSize, int offsetX, int offsetY) {
+    private List<String> generateTriangleCommandList(Map<Integer, List<ImageProcessor.Triangle>> triangles, int displayPixelSize, int sliceStartX, int sliceStartY, int displayStartX, int displayStartY) {
         List<String> commands = new ArrayList<>();
         int maxCoord = displayPixelSize - 1;
         for (Map.Entry<Integer, List<ImageProcessor.Triangle>> entry : triangles.entrySet()) {
@@ -230,20 +225,24 @@ public class LogicCore {
             if (!triangleList.isEmpty()) {
                 commands.add(formatColorCommand(entry.getKey()));
                 for (ImageProcessor.Triangle t : triangleList) {
-                    int raw_x1 = t.x1 - offsetX;
-                    int raw_y1 = displayPixelSize - 1 - (t.y1 - offsetY);
-                    int raw_x2 = t.x2 - offsetX;
-                    int raw_y2 = displayPixelSize - 1 - (t.y2 - offsetY);
-                    int raw_x3 = t.x3 - offsetX;
-                    int raw_y3 = displayPixelSize - 1 - (t.y3 - offsetY);
-
-                    int x1 = Math.max(0, Math.min(maxCoord, raw_x1));
-                    int y1 = Math.max(0, Math.min(maxCoord, raw_y1));
-                    int x2 = Math.max(0, Math.min(maxCoord, raw_x2));
-                    int y2 = Math.max(0, Math.min(maxCoord, raw_y2));
-                    int x3 = Math.max(0, Math.min(maxCoord, raw_x3));
-                    int y3 = Math.max(0, Math.min(maxCoord, raw_y3));
-                    
+                    int globalX1 = sliceStartX + t.x1;
+                    int globalY1 = sliceStartY + t.y1;
+                    int globalX2 = sliceStartX + t.x2;
+                    int globalY2 = sliceStartY + t.y2;
+                    int globalX3 = sliceStartX + t.x3;
+                    int globalY3 = sliceStartY + t.y3;
+                    int localX1 = globalX1 - displayStartX;
+                    int localY1 = globalY1 - displayStartY;
+                    int localX2 = globalX2 - displayStartX;
+                    int localY2 = globalY2 - displayStartY;
+                    int localX3 = globalX3 - displayStartX;
+                    int localY3 = globalY3 - displayStartY;
+                    int x1 = Math.max(0, Math.min(maxCoord, localX1));
+                    int y1 = maxCoord - Math.max(0, Math.min(maxCoord, localY1));
+                    int x2 = Math.max(0, Math.min(maxCoord, localX2));
+                    int y2 = maxCoord - Math.max(0, Math.min(maxCoord, localY2));
+                    int x3 = Math.max(0, Math.min(maxCoord, localX3));
+                    int y3 = maxCoord - Math.max(0, Math.min(maxCoord, localY3));
                     commands.add(String.format("draw triangle %d %d %d %d %d %d 0 0", x1, y1, x2, y2, x3, y3));
                 }
             }

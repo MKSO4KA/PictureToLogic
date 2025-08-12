@@ -1,37 +1,31 @@
 package com.mkso4ka.mindustry.matrixproc;
 
-import static java.lang.Math.ceil;
-import static java.lang.Math.max;
+import org.waveware.delaunator.DPoint;
 
-/**
- * Вычисляет общие размеры схемы и координаты нижних левых углов для каждого дисплея.
- */
-class DisplayMatrix {
-    public DisplayMatrix() {}
+public class DisplayMatrix {
+    public MatrixBlueprint placeDisplaysXxY(int displaysX, int displaysY, int displaySize, int processorReach) {
+        // Зазор между дисплеями равен удвоенному радиусу досягаемости,
+        // чтобы у каждого дисплея была своя зона для процессоров.
+        int gap = processorReach * 2;
+        
+        // Вычисляем размер "контентной" части - все дисплеи и зазоры между ними.
+        int contentWidth = displaysX * displaySize + Math.max(0, displaysX - 1) * gap;
+        int contentHeight = displaysY * displaySize + Math.max(0, displaysY - 1) * gap;
 
-    public MatrixBlueprint placeDisplaysXxY(int x, int y, int displaySize, double processorReach) {
-        int border = (int) ceil(processorReach) + 1;
-        int spacing = 0;
+        // Итоговый размер матрицы должен включать рамку для процессоров ВОКРУГ всей сетки.
+        // Это и есть ключевое исправление.
+        int totalWidth = contentWidth + processorReach * 2;
+        int totalHeight = contentHeight + processorReach * 2;
 
-        int n = border * 2 + y * displaySize + max(0, y - 1) * spacing;
-        int m = border * 2 + x * displaySize + max(0, x - 1) * spacing;
-
-        int[][] bottomLefts = new int[y * x][2];
-        int startOffset = border;
-        int count = 0;
-
-        for (int j = 0; j < x; j++) {
-            for (int i = 0; i < y; i++) {
-                int topLeftX = startOffset + j * displaySize;
-                bottomLefts[count][0] = topLeftX;
-
-                int topLeftY_java = startOffset + i * displaySize;
-                int bottomLeftY_java = topLeftY_java + displaySize - 1;
-                bottomLefts[count][1] = (n - 1) - bottomLeftY_java;
-
-                count++;
+        DPoint[] displayCoords = new DPoint[displaysX * displaysY];
+        for (int i = 0; i < displaysY; i++) {
+            for (int j = 0; j < displaysX; j++) {
+                // Смещаем координаты каждого дисплея, чтобы учесть начальную рамку.
+                int x = processorReach + j * (displaySize + gap);
+                int y = processorReach + i * (displaySize + gap);
+                displayCoords[j * displaysY + i] = new DPoint(x, y);
             }
         }
-        return new MatrixBlueprint(n, m, bottomLefts);
+        return new MatrixBlueprint(totalWidth, totalHeight, displayCoords);
     }
 }
