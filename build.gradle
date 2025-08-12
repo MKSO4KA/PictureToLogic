@@ -38,7 +38,8 @@ dependencies {
 
 processResources {
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
-    from(sourceSets.main.resources.srcDirs) {
+    // Говорим Gradle: "Найди файл mod.hjson в ресурсах и примени к нему фильтр"
+    filesMatching('mod.hjson') {
         filter(org.apache.tools.ant.filters.ReplaceTokens, tokens: [
             VERSION: project.version
         ])
@@ -49,7 +50,12 @@ jar {
     archiveBaseName = project.name + "-Desktop"
 
     // Эта строка добавляет в JAR скомпилированные классы вашего мода и ресурсы (включая mod.hjson)
-    from sourceSets.main.output
+    from(sourceSets.main.output) {
+        // Исключаем дубликаты лицензий и прочего мусора из зависимостей
+        exclude "META-INF/LICENSE"
+        exclude "META-INF/NOTICE"
+        exclude "META-INF/maven/**"
+    }
 
     // Этот блок, как и раньше, добавляет зависимости
     from {
